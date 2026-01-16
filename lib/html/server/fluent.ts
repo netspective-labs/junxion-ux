@@ -26,6 +26,9 @@ import {
   trustedRaw,
 } from "../shared.ts";
 
+import { JunxionUX } from "../hypermedia.ts";
+export { JunxionUX };
+
 export { raw, trustedRaw };
 export type { Attrs, AttrValue, Child, RawHtml };
 
@@ -116,44 +119,6 @@ export const styleCss: (cssText: string, attrs?: Attrs) => RawHtml = (
   cssText,
   attrs,
 ) => style(attrs ?? {}, trustedRaw(cssText));
-
-// Hypermedia helpers (attribute vocabulary + headers)
-// This is implemented by our dependency-free browser runtime.
-const q = (s: string) => JSON.stringify(s);
-const actionExpr = (name: string, uri: string) => `@${name}(${q(uri)})`;
-const on = (eventName: string, expr: string) => ({
-  [`data-on:${eventName}`]: expr,
-});
-
-export const JunxionUX = {
-  on,
-
-  get: (uri: string) => actionExpr("get", uri),
-  post: (uri: string) => actionExpr("post", uri),
-  put: (uri: string) => actionExpr("put", uri),
-  patch: (uri: string) => actionExpr("patch", uri),
-  delete: (uri: string) => actionExpr("delete", uri),
-
-  clickGet: (uri: string) => on("click", actionExpr("get", uri)),
-  clickPost: (uri: string) => on("click", actionExpr("post", uri)),
-  loadGet: (uri: string) => on("load", actionExpr("get", uri)),
-
-  signals: (obj: Record<string, unknown>) => ({
-    "data-signals": JSON.stringify(obj),
-  }),
-
-  bind: (path: string) => ({
-    [`data-bind:${path}`]: "",
-  }),
-
-  headers: {
-    selector: "datastar-selector",
-    mode: "datastar-mode",
-    useViewTransition: "datastar-use-view-transition",
-    onlyIfMissing: "datastar-only-if-missing",
-    request: "Datastar-Request",
-  },
-} as const;
 
 // Full HTML tag set as named exports (no el export)
 export const a: TagFn = tag("a");

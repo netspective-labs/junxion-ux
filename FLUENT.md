@@ -35,20 +35,20 @@ The API is intentionally almost identical in both environments.
 
 Fluent HTML follows three rules:
 
-1. **HTML is data, not text**
+1. HTML is data, not text
 
-   - You never concatenate HTML strings.
-   - You never interpolate unescaped user input.
+- You never concatenate HTML strings.
+- You never interpolate unescaped user input.
 
-2. **TypeScript is the control flow**
+2. TypeScript is the control flow
 
-   - Loops, conditionals, and composition are just normal TypeScript.
-   - No template syntax to learn.
+- Loops, conditionals, and composition are just normal TypeScript.
+- No template syntax to learn.
 
-3. **Escape by default**
+3. Escape by default
 
-   - Text is always escaped.
-   - Raw HTML must be explicitly opted into.
+- Text is always escaped.
+- Raw HTML must be explicitly opted into.
 
 ## Server vs client
 
@@ -127,8 +127,8 @@ input({ type: "text", disabled: true });
 
 Rules:
 
-- `true` → emits a bare attribute
-- `false`, `null`, `undefined` → omitted
+- `true` emits a bare attribute
+- `false`, `null`, `undefined` are omitted
 - ordering is deterministic
 
 ```ts
@@ -167,13 +167,13 @@ div("<script>alert(1)</script>");
 div(raw("<b>ok</b>"));
 ```
 
-This is intentionally noisy. Juniors should feel friction here.
+This is intentionally noisy. Use `raw()` only when you absolutely must.
 
 ## Builders (imperative children)
 
 This is the most important concept.
 
-Anywhere you can pass a child, you can pass a **builder function**:
+Anywhere you can pass a child, you can pass a builder function:
 
 ```ts
 ul((e) => {
@@ -201,9 +201,7 @@ div((e) => {
 });
 ```
 
-No ternaries. No fragments. No JSX rules.
-
-Just TypeScript.
+Just TypeScript. No JSX rules.
 
 ## Helpers for juniors
 
@@ -237,8 +235,6 @@ div({
 });
 ```
 
-No accidental `"false"` or `"undefined"` classes.
-
 ### `css(...)`
 
 Inline styles as objects.
@@ -252,8 +248,6 @@ div({
 });
 ```
 
-Stable output, kebab-cased automatically.
-
 ### `each(...)`
 
 Safer than `.map()` for juniors.
@@ -263,8 +257,6 @@ ul(
   each(items, (it) => li(it.name)),
 );
 ```
-
-No forgotten `return`, no nested arrays.
 
 ## Script and style safety
 
@@ -296,29 +288,80 @@ styleCss(`
 
 This avoids teaching juniors to use `raw()`.
 
-## Hypermedia helpers (JunxionUX)
+## Hypermedia (typed JunxionUX helpers)
 
-The server fluent API includes helpers for hypermedia-style attributes:
+Fluent supports hypermedia-style interactivity by emitting a `data-*` vocabulary
+that a small local runtime wires up in the browser.
+
+The important rule is that juniors should never hand-write action strings like
+`@get("/items")`. Use typed helper functions.
+
+### Basic example
 
 ```ts
 button(
   attrs(
-    { id: "ping" },
-    JunxionUX.clickGet("/ping"),
+    { id: "items" },
+    JunxionUX.clickGet("/items"),
   ),
-  "Ping",
+  "Load items",
 );
 ```
 
-This emits:
+This produces the correct attribute value for you:
 
 ```html
-<button id="ping" data-on:click="@get(&quot;/ping&quot;)">Ping</button>
+<button id="items" data-on:click="@get(&quot;/items&quot;)">Load items</button>
 ```
 
-On the client, the runtime auto-loads when these attributes appear.
+The runtime looks for `data-on:*` attributes and attaches the appropriate
+listeners.
 
-No manual wiring.
+### More explicit composition
+
+If you want to be explicit about the event and action:
+
+```ts
+button(
+  attrs(
+    JunxionUX.onClick(JunxionUX.get("/items")),
+  ),
+  "Load items",
+);
+```
+
+This is still string-free at the call site.
+
+### Why this is safer
+
+- No accidental typos in `@get` or parentheses
+- No broken quotes in `"/items"`
+- No wrong `data-on:` attribute spelling
+- Centralized behavior and conventions in one place
+
+### Signals (state) and binding
+
+You can attach initial state as JSON using typed helpers:
+
+```ts
+div(
+  attrs(JunxionUX.signals({ count: 0 })),
+  span("Count:"),
+  span(attrs({ "data-text": "count" }), "0"),
+);
+```
+
+Signals are intended to be lightweight UI state. The runtime can keep them in
+sync with bindings.
+
+Binding helper:
+
+```ts
+input(attrs(
+  { type: "text" },
+  JunxionUX.bind("user.name"),
+));
+```
 
 ## Comparison with React
 
@@ -332,47 +375,21 @@ No manual wiring.
 
 #### No virtual DOM
 
-React:
+React builds an intermediate tree and diffs on every render.
 
-- builds an intermediate tree
-- diffs on every render
-- requires a runtime scheduler
-
-Fluent HTML:
-
-- produces final HTML or DOM directly
-- no diffing
-- no reconciliation
-- no hooks
+Fluent produces final HTML or DOM directly. No diffing, no reconciliation.
 
 #### No JSX
 
-React:
+React typically requires JSX and a build step.
 
-- requires JSX
-- requires a build step
-- has special syntax rules
-
-Fluent HTML:
-
-- plain TypeScript
-- no compiler transforms
-- works in Deno without tooling
+Fluent is plain TypeScript and works in Deno without transforms.
 
 #### No hidden lifecycle
 
-React:
+React has hooks, effects, and render cycles.
 
-- effects
-- hooks
-- dependency arrays
-- render cycles
-
-Fluent HTML:
-
-- what you write is what runs
-- no reactivity unless you add it
-- easy to reason about
+Fluent runs what you write. There is no implicit reactivity.
 
 ## When Fluent HTML is better
 
@@ -408,7 +425,7 @@ It replaces:
 - Power is opt-in, not implicit
 - What you read is what runs
 
-If a junior can read this code:
+If you can read this code:
 
 ```ts
 main((e) => {
@@ -422,13 +439,4 @@ main((e) => {
 });
 ```
 
-They understand exactly what the HTML will be.
-
-No magic. No surprises.
-
-If you want, next good follow-ups are:
-
-- a “dos and don’ts” cheat sheet for juniors
-- a migration guide from JSX to Fluent HTML
-- a set of lint rules specifically for fluent usage
-- a cookbook of common UI patterns (tables, forms, layouts)
+You can predict exactly what HTML will be emitted.

@@ -6,6 +6,7 @@
 // Browser-side fluent HTML builder + dependency-free runtime integration.
 // This file has no external dependencies. It wires our local runtime via enhance().
 
+import { JunxionUX } from "../../../lib/html/hypermedia.ts";
 import {
   type Attrs,
   attrs as mergeAttrs,
@@ -20,8 +21,8 @@ import {
   styleText,
   trustedRaw,
 } from "../../../lib/html/shared.ts";
-
 import { enhance } from "./runtime.ts";
+export { JunxionUX };
 
 export { raw, trustedRaw };
 export type { Child };
