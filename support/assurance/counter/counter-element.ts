@@ -1,7 +1,13 @@
 // support/assurance/counter/public/counter-element.ts
 
-import { button, div, span } from "../../../src/html/browser-ua/fluent.ts";
+import {
+  attrs,
+  button,
+  div,
+  span,
+} from "../../../src/html/browser-ua/fluent.ts";
 import { JunxionElement } from "../../../src/html/browser-ua/custom-element/base.ts";
+import { JunxionUX } from "../../../lib/html/hypermedia.ts";
 
 type CounterState = {
   count: number;
@@ -37,7 +43,7 @@ export class JxCounter extends JunxionElement<CounterState> {
       this.setAttribute("data-swap", "outer");
     }
 
-    // hydrate state from attribute
+    // Hydrate state from attribute
     const n = Number(this.getAttribute("count") ?? "0");
     if (!Number.isNaN(n)) this.setState({ count: n });
 
@@ -45,15 +51,16 @@ export class JxCounter extends JunxionElement<CounterState> {
   }
 
   protected render(): Node {
-    const count = this.state.count;
+    const { count } = this.state;
 
-    // Click triggers fetch of a fragment. Server returns <jx-counter count="N"></jx-counter>
     const incBtn = button(
-      {
-        "data-on:click": `@post(${JSON.stringify("/inc")})`,
-        "data-target": "closest:jx-counter",
-        "data-swap": "outer",
-      },
+      attrs(
+        JunxionUX.onClick(JunxionUX.post("/inc")),
+        {
+          "data-target": "closest:jx-counter",
+          "data-swap": "outer",
+        },
+      ),
       "Increment",
     );
 

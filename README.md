@@ -14,6 +14,22 @@ The core idea is simple: the same fluent mental model applies everywhere, but
 the implementation is environment-specific and intentionally constrained so that
 developers cannot “do the wrong thing.”
 
+⚠️ Test cases use bundled JS while the e2e test uses on-demand bundling. This
+allows us to test both ways.
+
+To test:
+
+```bash
+$ deno task bundle:client                # used by unit tests, not needed by counter/server.ts
+$ deno task test                         # runs Deno unit tests
+$ ./support/assurance/counter/server.ts  # e2e test
+```
+
+TODO:
+
+- [ ] Add bundling of `lib/html/hypermedia.ts`
+- [ ] Add deno task git-pre-commit to do "local CI/CD"
+
 ## Purpose and design goals
 
 On the server side, the library generates HTML strings safely and

@@ -1,12 +1,7 @@
 // lib/html/server/fluent.ts
 //
 // Server-side fluent HTML builder.
-// - Juniors use named tag functions only (we do NOT export el)
-// - Deterministic attribute ordering
-// - Safe-by-default text escaping; explicit raw()/trustedRaw() for opt-in HTML injection
-// - Supports imperative child builders anywhere in children lists
-// - Hypermedia helpers emit an attribute vocabulary and headers that our own
-//   dependency-free browser runtime understands.
+// Strict endpoint: rejects DOM nodes in children.
 
 import {
   type Attrs,
@@ -15,6 +10,7 @@ import {
   type Child,
   children as childrenFn,
   classNames,
+  type DomNodeLike,
   each as eachFn,
   escapeHtml,
   flattenChildren,
@@ -25,9 +21,6 @@ import {
   styleText,
   trustedRaw,
 } from "../shared.ts";
-
-import { JunxionUX } from "../hypermedia.ts";
-export { JunxionUX };
 
 export { raw, trustedRaw };
 export type { Attrs, AttrValue, Child, RawHtml };
@@ -44,35 +37,11 @@ export type TagFn = (
   ...children: Child[]
 ) => RawHtml;
 
-// Internal primitive, intentionally not exported.
-const el = (tag: string, ...args: unknown[]) => {
-  let attrs: Attrs | undefined;
-  let children: Child[];
-
-  if (args.length > 0 && isAttrs(args[0])) {
-    attrs = args[0] as Attrs;
-    children = args.slice(1) as Child[];
-  } else {
-    children = args as Child[];
-  }
-
-  const attrText = serializeAttrs(attrs);
-
-  // flattenChildren() executes ChildBuilder callbacks anywhere in the tree
-  const flat = flattenChildren(children);
-
-  let inner = "";
-  for (const c of flat) {
-    if (typeof c === "string") inner += escapeHtml(c);
-    else inner += c.__rawHtml;
-  }
-
-  if (isVoidElement(tag)) return trustedRaw(`<${tag}${attrText}>`);
-  return trustedRaw(`<${tag}${attrText}>${inner}</${tag}>`);
+const isDomNodeLike = (v: unknown): v is DomNodeLike => {
+  return typeof v === "object" && v !== null &&
+    "nodeType" in (v as Record<string, unknown>) &&
+    typeof (v as Record<string, unknown>).nodeType === "number";
 };
-
-const tag = (name: string): TagFn => (...args: unknown[]) =>
-  el(name, ...(args as never[]));
 
 const isAttrs = (v: unknown): v is Attrs => {
   if (!isPlainObject(v)) return false;
@@ -99,6 +68,53 @@ const VOID_ELEMENTS = new Set([
 
 const isVoidElement = (t: string) => VOID_ELEMENTS.has(t.toLowerCase());
 
+// Internal primitive, intentionally not exported.
+const el = (tag: string, ...args: unknown[]) => {
+  let attrs: Attrs | undefined;
+  let children: Child[];
+
+  if (args.length > 0 && isAttrs(args[0])) {
+    attrs = args[0] as Attrs;
+    children = args.slice(1) as Child[];
+  } else {
+    children = args as Child[];
+  }
+
+  const attrText = serializeAttrs(attrs);
+  const flat = flattenChildren(children);
+
+  let inner = "";
+  for (const c of flat) {
+    if (typeof c === "string") {
+      inner += escapeHtml(c);
+      continue;
+    }
+
+    if (typeof c === "object" && c && "__rawHtml" in c) {
+      inner += (c as RawHtml).__rawHtml;
+      continue;
+    }
+
+    if (isDomNodeLike(c)) {
+      throw new Error(
+        [
+          "Fluent server error: a DOM Node was passed as a child.",
+          "This usually means browser fluent output leaked into server rendering.",
+          "Fix: build server HTML with lib/html/server/fluent.ts only and do not pass DOM nodes as children.",
+        ].join(" "),
+      );
+    }
+
+    throw new Error("Fluent server error: unsupported child type.");
+  }
+
+  if (isVoidElement(tag)) return trustedRaw(`<${tag}${attrText}>`);
+  return trustedRaw(`<${tag}${attrText}>${inner}</${tag}>`);
+};
+
+const tag = (name: string): TagFn => (...args: unknown[]) =>
+  el(name, ...(args as never[]));
+
 // Convenience primitives
 export const doctype: () => RawHtml = () => trustedRaw("<!doctype html>");
 export const comment: (s: string) => RawHtml = (s) =>
@@ -119,6 +135,46 @@ export const styleCss: (cssText: string, attrs?: Attrs) => RawHtml = (
   cssText,
   attrs,
 ) => style(attrs ?? {}, trustedRaw(cssText));
+
+// Type-safe custom element tag helper (server)
+export const customElement = (name: `${string}-${string}`): TagFn => tag(name);
+
+// Hypermedia helpers (kept as-is; you can swap internals later)
+const q = (s: string) => JSON.stringify(s);
+const actionExpr = (name: string, uri: string) => `@${name}(${q(uri)})`;
+const on = (eventName: string, expr: string) => ({
+  [`data-on:${eventName}`]: expr,
+});
+
+export const JunxionUX = {
+  on,
+
+  get: (uri: string) => actionExpr("get", uri),
+  post: (uri: string) => actionExpr("post", uri),
+  put: (uri: string) => actionExpr("put", uri),
+  patch: (uri: string) => actionExpr("patch", uri),
+  delete: (uri: string) => actionExpr("delete", uri),
+
+  clickGet: (uri: string) => on("click", actionExpr("get", uri)),
+  clickPost: (uri: string) => on("click", actionExpr("post", uri)),
+  loadGet: (uri: string) => on("load", actionExpr("get", uri)),
+
+  signals: (obj: Record<string, unknown>) => ({
+    "data-signals": JSON.stringify(obj),
+  }),
+
+  bind: (path: string) => ({
+    [`data-bind:${path}`]: "",
+  }),
+
+  headers: {
+    selector: "datastar-selector",
+    mode: "datastar-mode",
+    useViewTransition: "datastar-use-view-transition",
+    onlyIfMissing: "datastar-only-if-missing",
+    request: "Datastar-Request",
+  },
+} as const;
 
 // Full HTML tag set as named exports (no el export)
 export const a: TagFn = tag("a");

@@ -1,5 +1,6 @@
 // lib/html/shared.ts
 // Shared runtime + types safe for server and client.
+// Pure shape expansion only: no environment-specific strictness.
 
 export type AttrValue =
   | string
@@ -12,12 +13,14 @@ export type Attrs = Record<string, AttrValue>;
 
 export type RawHtml = { readonly __rawHtml: string };
 
+// Structural “DOM Node” shape, safe to reference without lib=dom.
+export type DomNodeLike = { readonly nodeType: number };
+
 // Builder support (usable anywhere a child can appear)
 export type ChildAdder = (...children: Child[]) => void;
 export type ChildBuilder = (e: ChildAdder) => void;
 
 // A "Child" is recursive and can include builder functions.
-// This is the key change that makes builder callbacks first-class children.
 export type Child =
   | string
   | number
@@ -25,6 +28,7 @@ export type Child =
   | null
   | undefined
   | RawHtml
+  | DomNodeLike
   | Child[]
   | ChildBuilder;
 
@@ -42,8 +46,7 @@ export function setRawPolicy(policy: RawPolicy): void {
 const isDev = (): boolean => {
   const deno = (globalThis as unknown as {
     Deno?: { env?: { get?: (k: string) => string | undefined } };
-  })
-    .Deno;
+  }).Deno;
   const env = deno?.env?.get?.("DENO_ENV");
   return env !== "production";
 };
@@ -74,9 +77,15 @@ export function escapeAttr(value: string): string {
   return escapeHtml(value);
 }
 
+const isDomNodeLike = (v: unknown): v is DomNodeLike => {
+  return typeof v === "object" && v !== null &&
+    "nodeType" in (v as Record<string, unknown>) &&
+    typeof (v as Record<string, unknown>).nodeType === "number";
+};
+
 /**
- * Flattens children into a linear list of (string | RawHtml), executing any
- * builder callbacks as it walks the structure.
+ * Flattens children into a linear list of (string | RawHtml | DomNodeLike),
+ * executing any builder callbacks as it walks the structure.
  *
  * Rules:
  * - null/undefined/false are skipped
@@ -84,17 +93,18 @@ export function escapeAttr(value: string): string {
  * - arrays are recursively expanded
  * - builder functions are executed, and whatever they emit is recursively expanded
  * - RawHtml is passed through as-is
+ * - DomNodeLike is passed through as-is (endpoint decides what to do)
  * - other primitives become strings
  */
 export function flattenChildren(
   children: readonly Child[],
-): (string | RawHtml)[] {
-  const out: (string | RawHtml)[] = [];
+): (string | RawHtml | DomNodeLike)[] {
+  const out: (string | RawHtml | DomNodeLike)[] = [];
 
   const visit = (c: Child): void => {
     if (c == null || c === false) return;
 
-    // Builder callback: execute it and visit what it emits
+    // Builder callback
     if (typeof c === "function") {
       const emit: ChildAdder = (...xs) => {
         for (const x of xs) visit(x);
@@ -115,10 +125,15 @@ export function flattenChildren(
       return;
     }
 
-    // Skip boolean true as a child (common accidental)
+    // DomNodeLike passthrough
+    if (isDomNodeLike(c)) {
+      out.push(c);
+      return;
+    }
+
+    // Skip boolean true as a child
     if (c === true) return;
 
-    // Everything else becomes string
     out.push(String(c));
   };
 
@@ -129,7 +144,7 @@ export function flattenChildren(
 export function serializeAttrs(attrs?: Attrs): string {
   if (!attrs) return "";
 
-  const keys = Object.keys(attrs).sort(); // deterministic output for tests
+  const keys = Object.keys(attrs).sort();
   let s = "";
   for (const k of keys) {
     const v = attrs[k];
@@ -208,7 +223,6 @@ export function styleText(
 }
 
 // Explicit wrapper for readability in call sites.
-// This returns a ChildBuilder, which is now also a valid Child.
 export function children(builder: ChildBuilder): ChildBuilder {
   return builder;
 }

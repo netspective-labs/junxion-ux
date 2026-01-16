@@ -4,42 +4,14 @@
 // src/html/browser-ua/runtime.ts
 //
 // Dependency-free hypermedia runtime for Fluent + custom elements.
-// Supports:
-//
-// Actions (via data-on:*):
-//   data-on:click='@get("/path")'   (also post/put/patch/delete)
-//   data-on:click='signals.setPath("x", 1)' (optional expressions)
-//
-// Signals:
-//   data-signals='{"count":1}'
-//   data-bind:foo.bar=""            (two-way for inputs, one-way for others)
-//
-// Simple directives:
-//   data-text="expr"
-//   data-show="expr"
-//   data-class:active="expr"
-//   data-attr:href="expr"
-//   data-effect="expr"
-//
-// Swaps from fetch responses (headers):
-//   datastar-selector
-//   datastar-mode: replace | inner | append | prepend | before | after
-//   datastar-only-if-missing
-//   datastar-use-view-transition
-//   Datastar-Request: true (request header)
-//
-// SSE (opt-in):
-//   data-sse="/events"
-//   Optional:
-//     data-sse-event="message"            (default "message")
-//     data-sse-signals="true"             (default true; merge JSON objects into signals)
-//     data-sse-selector="#target"         (swap target; default closest data-target / currentTarget / root host)
-//     data-sse-mode="inner|append|..."    (default "append")
-//     data-sse-only-if-missing="true"
-//
-// Exports used by custom elements:
-//   enhance({ root })
-//   closeSseIfPresent(rootOrElement)
+// Tolerant action parsing:
+//   @get("/x")   (JSON string)
+//   @get('/x')   (single-quoted string)
+//   @get(/x)     (bare token; no spaces)
+// Also supports basic target helpers:
+//   data-target="self"              (current element)
+//   data-target="closest:tag-name"  (closest ancestor matching tag-name)
+// Otherwise data-target is treated as a selector scoped to Document or ShadowRoot.
 
 type Mode = "replace" | "inner" | "append" | "prepend" | "before" | "after";
 
@@ -150,22 +122,96 @@ const parseJsonObject = (s: string): Record<string, unknown> | null => {
   }
 };
 
+const truthy = (v: string | null) =>
+  v != null && /^(1|true|yes|on)$/i.test(v.trim());
+
+const normalizeMode = (v: string | null): Mode => {
+  const s = (v ?? "").trim().toLowerCase();
+  if (
+    s === "replace" || s === "inner" || s === "append" || s === "prepend" ||
+    s === "before" || s === "after"
+  ) return s;
+  if (s === "outer") return "replace";
+  return "inner";
+};
+
+// ------------------------------
+// Action parsing (tolerant)
+// ------------------------------
+
+const stripQuotes = (s: string): string | null => {
+  const t = s.trim();
+  if (t.length < 2) return null;
+
+  const a = t[0];
+  const b = t[t.length - 1];
+
+  // JSON string or single-quoted string
+  if ((a === `"` && b === `"`) || (a === `'` && b === `'`)) {
+    // If it's double-quoted, prefer JSON.parse for escapes correctness.
+    if (a === `"` && b === `"`) {
+      try {
+        const v = JSON.parse(t);
+        return typeof v === "string" ? v : null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Single-quoted: accept simple escapes \' and \\ minimally.
+    let out = "";
+    for (let i = 1; i < t.length - 1; i++) {
+      const ch = t[i];
+      if (ch === "\\" && i + 1 < t.length - 1) {
+        const n = t[i + 1];
+        if (n === "'" || n === "\\" || n === "n" || n === "t" || n === "r") {
+          if (n === "n") out += "\n";
+          else if (n === "t") out += "\t";
+          else if (n === "r") out += "\r";
+          else out += n;
+          i++;
+          continue;
+        }
+        // Unknown escape: keep as-is (tolerant)
+        out += n;
+        i++;
+        continue;
+      }
+      out += ch;
+    }
+    return out;
+  }
+
+  return null;
+};
+
+const parseActionArg = (raw: string): string | null => {
+  const t = raw.trim();
+  if (!t) return null;
+
+  // JSON/double-quoted or single-quoted
+  const q = stripQuotes(t);
+  if (q != null) return q;
+
+  // Bare token fallback for simple cases like /inc or relative/path
+  // Reject if it contains whitespace or comma (i.e. multiple args).
+  if (/\s/.test(t)) return null;
+  if (t.includes(",")) return null;
+
+  // Allow: /foo, foo, ./foo, ../foo, ?x=1, #hash, etc.
+  return t;
+};
+
 const parseAction = (expr: string): { method: string; url: string } | null => {
   const m = expr.trim().match(/^@([a-zA-Z]+)\((.*)\)\s*$/);
   if (!m) return null;
 
   const name = m[1].toLowerCase();
-  const arg = m[2].trim();
-  if (!arg) return null;
+  const argRaw = m[2].trim();
+  if (!argRaw) return null;
 
-  let url = "";
-  try {
-    const v = JSON.parse(arg);
-    if (typeof v !== "string") return null;
-    url = v;
-  } catch {
-    return null;
-  }
+  const url = parseActionArg(argRaw);
+  if (!url) return null;
 
   const method = (() => {
     switch (name) {
@@ -188,19 +234,9 @@ const parseAction = (expr: string): { method: string; url: string } | null => {
   return { method, url };
 };
 
-const truthy = (v: string | null) =>
-  v != null && /^(1|true|yes|on)$/i.test(v.trim());
-
-const normalizeMode = (v: string | null): Mode => {
-  const s = (v ?? "").trim().toLowerCase();
-  if (
-    s === "replace" || s === "inner" || s === "append" || s === "prepend" ||
-    s === "before" || s === "after"
-  ) {
-    return s;
-  }
-  return "inner";
-};
+// ------------------------------
+// Bind helpers
+// ------------------------------
 
 const isFormLike = (
   el: Element,
@@ -321,10 +357,112 @@ const applyHtmlUpdate = (htmlText: string, target: Element, mode: Mode) => {
   }
 };
 
+const shadowRootOf = (el: Element): ShadowRoot | null => {
+  const anyEl = el as unknown as { shadowRoot?: ShadowRoot | null };
+  return anyEl.shadowRoot ?? null;
+};
+
+const enhanceShadowRootsUnder = (
+  root: ParentNode,
+  options?: RuntimeOptions,
+) => {
+  const scope = root instanceof Document
+    ? root
+    : (root as unknown as ShadowRoot | Element);
+
+  const all = (scope as Document | ShadowRoot | Element).querySelectorAll?.(
+    "*",
+  );
+  if (!all) return;
+
+  for (const el of all) {
+    const sr = shadowRootOf(el);
+    if (sr) {
+      // Safe: runtimes WeakMap dedupes per root.
+      enhance({ root: sr, options });
+    }
+  }
+};
+
 const rootDocumentOf = (root: ParentNode): Document => {
   if (root instanceof Document) return root;
   if (root instanceof ShadowRoot) return root.ownerDocument;
   return root.ownerDocument ?? document;
+};
+
+// Support:
+//   data-target="self"
+//   data-target="closest:tag"
+// Otherwise selector lookup (shadow-scoped if possible).
+const resolveTargetSpec = (
+  spec: string,
+  ev: Event | null,
+  root: ParentNode,
+): Element | null => {
+  const doc = rootDocumentOf(root);
+  const ct = (ev?.currentTarget instanceof Element) ? ev.currentTarget : null;
+  const t = (ev?.target instanceof Element) ? ev.target : null;
+  const base = ct ?? t;
+
+  const s = spec.trim();
+  if (!s) return null;
+
+  if (s === "self") return base;
+
+  if (s.startsWith("closest:")) {
+    const sel = s.slice("closest:".length).trim();
+    if (!sel) return null;
+    return base?.closest?.(sel) ?? null;
+  }
+
+  // Selector: shadow scoped if root is ShadowRoot
+  if (root instanceof ShadowRoot) return root.querySelector(s);
+
+  return doc.querySelector(s);
+};
+
+type TargetSpec =
+  | { kind: "self" }
+  | { kind: "closest"; selector: string }
+  | { kind: "selector"; selector: string };
+
+const parseTargetSpec = (s: string | null): TargetSpec | null => {
+  const t = (s ?? "").trim();
+  if (!t) return null;
+  if (t === "self") return { kind: "self" };
+  if (t.startsWith("closest:")) {
+    const sel = t.slice("closest:".length).trim();
+    if (!sel) return null;
+    return { kind: "closest", selector: sel };
+  }
+  return { kind: "selector", selector: t };
+};
+
+const resolveTargetFromSpec = (
+  root: ParentNode,
+  from: Element,
+  spec: TargetSpec | null,
+): Element | null => {
+  if (!spec) return null;
+
+  if (spec.kind === "self") return from;
+
+  if (spec.kind === "closest") {
+    // closest() works in shadow DOM too, but walks within the tree it’s in.
+    // For your use case, that’s correct.
+    return from.closest(spec.selector);
+  }
+
+  // selector
+  try {
+    if (root instanceof ShadowRoot) {
+      return root.querySelector(spec.selector);
+    }
+    const doc = rootDocumentOf(root);
+    return doc.querySelector(spec.selector);
+  } catch {
+    return null;
+  }
 };
 
 const defaultSwapTarget = (event: Event | null, root: ParentNode): Element => {
@@ -334,40 +472,33 @@ const defaultSwapTarget = (event: Event | null, root: ParentNode): Element => {
     ? event.currentTarget
     : null;
 
+  // Walk up from target/currentTarget looking for data-target
   const find = (start: Element | null) => {
     for (let el = start; el; el = el.parentElement) {
-      const sel = el.getAttribute("data-target");
-      if (sel) {
-        const found = doc.querySelector(sel);
-        if (found instanceof Element) return found;
-      }
-      if (el instanceof HTMLElement) {
-        const host = el.getRootNode?.();
-        if (host instanceof ShadowRoot) {
-          const s2 = el.getAttribute("data-target");
-          if (s2) {
-            const found2 = host.querySelector(s2);
-            if (found2 instanceof Element) return found2;
-          }
-        }
+      const spec = el.getAttribute("data-target");
+      if (spec) {
+        const resolved = resolveTargetSpec(spec, event, root);
+        if (resolved) return resolved;
       }
     }
     return null;
   };
 
+  // If in shadow root, prefer shadow-scoped selectors
   if (root instanceof ShadowRoot) {
-    const inShadow = (sel: string) => root.querySelector(sel);
-    const direct = t?.getAttribute("data-target") ??
-      ct?.getAttribute("data-target");
-    if (direct) {
-      const f = inShadow(direct);
-      if (f instanceof Element) return f;
+    const spec = ct?.getAttribute("data-target") ??
+      t?.getAttribute("data-target");
+    if (spec) {
+      const resolved = resolveTargetSpec(spec, event, root);
+      if (resolved) return resolved;
     }
+
     const f2 = find(t) ?? find(ct);
     if (f2) return f2;
+
     return root.host instanceof Element
       ? root.host
-      : doc.body ?? doc.documentElement;
+      : (doc.body ?? doc.documentElement);
   }
 
   return find(t) ?? find(ct) ?? ct ?? (doc.body ?? doc.documentElement);
@@ -462,6 +593,16 @@ const scanAndWireEvents = (root: ParentNode, state: RuntimeState) => {
           } finally {
             scheduleUpdate(root, state);
           }
+        } else {
+          // If it wasn't an action and couldn't compile as JS, warn once.
+          if (exprText.trim().startsWith("@")) {
+            console.warn(
+              "fluent runtime: unrecognized action syntax for",
+              name,
+              "=>",
+              exprText,
+            );
+          }
         }
       });
     }
@@ -518,8 +659,7 @@ const updateDirectives = (root: ParentNode, state: RuntimeState) => {
       if (compiled.kind === "expr" && compiled.fn) {
         try {
           const v = compiled.fn(state.signals, null, el);
-          const show = Boolean(v);
-          (el as HTMLElement).style.display = show ? "" : "none";
+          (el as HTMLElement).style.display = v ? "" : "none";
         } catch {
           // ignore
         }
@@ -545,8 +685,10 @@ const updateDirectives = (root: ParentNode, state: RuntimeState) => {
       });
       if (compiled.kind === "expr" && compiled.fn) {
         try {
-          const v = compiled.fn(state.signals, null, el);
-          el.classList.toggle(clsName, Boolean(v));
+          el.classList.toggle(
+            clsName,
+            Boolean(compiled.fn(state.signals, null, el)),
+          );
         } catch {
           // ignore
         }
@@ -643,6 +785,8 @@ const performAction = async (
   });
 
   const selector = res.headers.get(state.options.headerSelector);
+  const swapModeFromEl = (el: Element): Mode =>
+    normalizeMode(el.getAttribute("data-swap"));
   const mode = normalizeMode(res.headers.get(state.options.headerMode));
   const onlyIfMissing = truthy(
     res.headers.get(state.options.headerOnlyIfMissing),
@@ -663,28 +807,48 @@ const performAction = async (
 
   const text = await res.text();
 
-  const target =
-    (selector
-      ? (root instanceof ShadowRoot
-        ? root.querySelector(selector)
-        : doc.querySelector(selector))
-      : null) ??
-      defaultSwapTarget(ev, root);
+  const spec = parseTargetSpec(el.getAttribute("data-target"));
+  const attrTarget = resolveTargetFromSpec(root, el, spec);
+
+  const target = (selector
+    ? (root instanceof ShadowRoot
+      ? (() => {
+        try {
+          return root.querySelector(selector);
+        } catch {
+          return null;
+        }
+      })()
+      : (() => {
+        const doc2 = rootDocumentOf(root);
+        try {
+          return doc2.querySelector(selector);
+        } catch {
+          return null;
+        }
+      })())
+    : null) ??
+    attrTarget ??
+    defaultSwapTarget(ev, root);
 
   if (!(target instanceof Element)) return;
+
+  const modeToUse = selector
+    ? mode // server/header-driven
+    : swapModeFromEl(el); // attribute-driven when no header override
+
   if (onlyIfMissing && target.childNodes.length > 0) return;
 
   // deno-lint-ignore require-await
   const doUpdate = async () => {
-    applyHtmlUpdate(text, target, mode);
+    applyHtmlUpdate(text, target, modeToUse);
     collectSignals(root, state.signals);
     scheduleUpdate(root, state);
   };
 
   const startVT = (doc as unknown as {
     startViewTransition?: (cb: () => Promise<void> | void) => unknown;
-  })
-    .startViewTransition;
+  }).startViewTransition;
 
   if (useViewTransition && typeof startVT === "function") {
     try {
@@ -719,7 +883,6 @@ const getOrCreateRootRuntime = (root: ParentNode, options?: RuntimeOptions) => {
   return rr;
 };
 
-// Public: wire directives and handlers for a root (Document or ShadowRoot).
 export const enhance = ({ root, options }: EnhanceOptions = {}) => {
   const r = root ?? document;
   const rr = getOrCreateRootRuntime(r, options);
@@ -728,19 +891,32 @@ export const enhance = ({ root, options }: EnhanceOptions = {}) => {
   scanAndWireEvents(r, rr.state);
   updateDirectives(r, rr.state);
 
+  // IMPORTANT: also wire anything living in Shadow DOM under this root.
+  enhanceShadowRootsUnder(r, options);
+
   if (!rr.state.mo) {
     rr.state.mo = new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const n of Array.from(m.addedNodes)) {
           if (!(n instanceof Element)) continue;
+
+          // If a custom element with a shadowRoot was added, wire its shadow tree.
+          const sr = shadowRootOf(n);
+          if (sr) enhance({ root: sr, options });
+
           if (n.hasAttribute("data-signals")) {
             const obj = parseJsonObject(n.getAttribute("data-signals") ?? "");
             if (obj) rr.state.signals.merge(obj);
           }
         }
       }
+
       scanAndWireEvents(r, rr.state);
       scheduleUpdate(r, rr.state);
+
+      // Re-scan for newly created shadow roots.
+      enhanceShadowRootsUnder(r, options);
+
       enhanceSse({ root: r });
     });
 
@@ -786,12 +962,17 @@ const resolveSseTarget = (
   el: Element,
   selector: string | null,
 ): Element | null => {
-  const doc = rootDocumentOf(root);
-  if (selector) {
-    if (root instanceof ShadowRoot) return root.querySelector(selector);
-    return doc.querySelector(selector);
+  if (!selector) return el;
+
+  if (selector === "self") return el;
+  if (selector.startsWith("closest:")) {
+    const s = selector.slice("closest:".length).trim();
+    return s ? (el.closest?.(s) ?? null) : null;
   }
-  return el;
+
+  const doc = rootDocumentOf(root);
+  if (root instanceof ShadowRoot) return root.querySelector(selector);
+  return doc.querySelector(selector);
 };
 
 const enhanceSse = ({ root }: { root: ParentNode }) => {
@@ -853,7 +1034,6 @@ const enhanceSse = ({ root }: { root: ParentNode }) => {
       scheduleUpdate(root, rr.state);
     };
 
-    // EventSource only has "message" as a strongly typed property, but addEventListener covers named events.
     src.addEventListener(eventName, handler as EventListener);
 
     setSseRecord(el, { source: src, root });
@@ -861,14 +1041,9 @@ const enhanceSse = ({ root }: { root: ParentNode }) => {
 };
 
 export const closeSseIfPresent = (rootOrElement: ParentNode | Element) => {
-  const scope: ParentNode = rootOrElement instanceof Element
-    ? (rootOrElement.getRootNode() as ParentNode)
-    : rootOrElement;
-
-  const doc = rootDocumentOf(scope);
   const base: ParentNode = rootOrElement instanceof Element
     ? rootOrElement
-    : scope;
+    : rootOrElement;
 
   const all = (base as unknown as Element | Document | ShadowRoot)
     .querySelectorAll?.("[data-sse]");
@@ -883,21 +1058,15 @@ export const closeSseIfPresent = (rootOrElement: ParentNode | Element) => {
       }
       setSseRecord(el, null);
     }
-  } else {
-    // Fallback: if it’s a single element
-    if (rootOrElement instanceof Element) {
-      const rec = getSseRecord(rootOrElement);
-      if (rec) {
-        try {
-          rec.source.close();
-        } catch {
-          // ignore
-        }
-        setSseRecord(rootOrElement, null);
+  } else if (rootOrElement instanceof Element) {
+    const rec = getSseRecord(rootOrElement);
+    if (rec) {
+      try {
+        rec.source.close();
+      } catch {
+        // ignore
       }
+      setSseRecord(rootOrElement, null);
     }
   }
-
-  // Keep unused refs from being optimized away in some bundlers.
-  void doc;
 };

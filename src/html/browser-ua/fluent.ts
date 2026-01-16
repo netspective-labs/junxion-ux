@@ -3,10 +3,8 @@
 
 // src/html/browser-ua/fluent.ts
 //
-// Browser-side fluent HTML builder + dependency-free runtime integration.
-// This file has no external dependencies. It wires our local runtime via enhance().
+// Browser fluent: accepts real DOM Nodes as children, appends directly.
 
-import { JunxionUX } from "../../../lib/html/hypermedia.ts";
 import {
   type Attrs,
   attrs as mergeAttrs,
@@ -14,6 +12,7 @@ import {
   type Child,
   children as childrenFn,
   classNames,
+  type DomNodeLike,
   each as eachFn,
   flattenChildren,
   isPlainObject,
@@ -21,8 +20,6 @@ import {
   styleText,
   trustedRaw,
 } from "../../../lib/html/shared.ts";
-import { enhance } from "./runtime.ts";
-export { JunxionUX };
 
 export { raw, trustedRaw };
 export type { Child };
@@ -58,7 +55,16 @@ const VOID_ELEMENTS = new Set([
 
 const isVoidElement = (t: string) => VOID_ELEMENTS.has(t.toLowerCase());
 
-// Internal primitive (not exported).
+const isDomNodeLike = (v: unknown): v is DomNodeLike => {
+  return typeof v === "object" && v !== null &&
+    "nodeType" in (v as Record<string, unknown>) &&
+    typeof (v as Record<string, unknown>).nodeType === "number";
+};
+
+const isRealDomNode = (v: unknown): v is Node => {
+  return typeof Node !== "undefined" && v instanceof Node;
+};
+
 const el = (tagName: string, ...args: unknown[]) => {
   let attrs: Attrs | undefined;
   let children: Child[];
@@ -85,15 +91,30 @@ const el = (tagName: string, ...args: unknown[]) => {
     console.warn(`Void element <${tagName}> should not have children.`);
   }
 
-  // flattenChildren executes builders anywhere in the tree
   for (const c of flattenChildren(children)) {
     if (typeof c === "string") {
       node.appendChild(document.createTextNode(c));
-    } else {
-      const t = document.createElement("template");
-      t.innerHTML = c.__rawHtml;
-      node.appendChild(t.content);
+      continue;
     }
+
+    if (typeof c === "object" && c && "__rawHtml" in c) {
+      const t = document.createElement("template");
+      t.innerHTML = (c as { __rawHtml: string }).__rawHtml;
+      node.appendChild(t.content);
+      continue;
+    }
+
+    if (isDomNodeLike(c)) {
+      if (isRealDomNode(c)) {
+        node.appendChild(c);
+        continue;
+      }
+      throw new Error(
+        "Fluent browser error: DomNodeLike provided but it is not a real DOM Node.",
+      );
+    }
+
+    throw new Error("Fluent browser error: unsupported child type.");
   }
 
   return node;
@@ -106,6 +127,10 @@ const tag =
 const legacyTag = (name: string) => (...args: unknown[]) =>
   el(name, ...(args as never[])) as HTMLElement;
 
+export const customElement =
+  <K extends `${string}-${string}`>(name: K) => (...args: unknown[]) =>
+    el(name, ...(args as never[])) as HTMLElement;
+
 export const mount = (target: Element, node: Node) => target.appendChild(node);
 export const replace = (target: Element, node: Node) =>
   target.replaceWith(node);
@@ -115,11 +140,27 @@ export const fragment = (...children: Child[]) => {
   for (const c of flattenChildren(children)) {
     if (typeof c === "string") {
       frag.appendChild(document.createTextNode(c));
-    } else {
-      const t = document.createElement("template");
-      t.innerHTML = c.__rawHtml;
-      frag.appendChild(t.content);
+      continue;
     }
+
+    if (typeof c === "object" && c && "__rawHtml" in c) {
+      const t = document.createElement("template");
+      t.innerHTML = (c as { __rawHtml: string }).__rawHtml;
+      frag.appendChild(t.content);
+      continue;
+    }
+
+    if (isDomNodeLike(c)) {
+      if (isRealDomNode(c)) {
+        frag.appendChild(c);
+        continue;
+      }
+      throw new Error(
+        "Fluent browser error: DomNodeLike provided but it is not a real DOM Node.",
+      );
+    }
+
+    throw new Error("Fluent browser error: unsupported child type.");
   }
   return frag;
 };
@@ -151,19 +192,6 @@ export const styleCss = (cssText: string, attrs?: Attrs) => {
   s.textContent = cssText;
   return s;
 };
-
-// Dependency-free runtime auto-integration.
-// We only call enhance() after DOM is available.
-const autoEnhance = () => {
-  const boot = () => enhance({ root: document });
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot, { once: true });
-  } else {
-    boot();
-  }
-};
-
-autoEnhance();
 
 // Named HTML tag exports (no el export)
 export const a = tag("a");
