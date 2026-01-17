@@ -4,6 +4,8 @@
 
   "imports": {
     "@std/path": "jsr:@std/path@1",
+    "@std/fs": "jsr:@std/fs@1",
+    "@std/media-types": "jsr:@std/media-types@^1",
     "@std/assert": "jsr:@std/assert@1"
   },
 
