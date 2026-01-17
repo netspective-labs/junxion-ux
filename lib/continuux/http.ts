@@ -154,9 +154,9 @@ export type SseEventMap = Record<string, unknown>;
 export type SseOptions = {
   headers?: HeadersInit;
   retryMs?: number;
-  disableProxyBuffering?: boolean;
-  keepAliveMs?: number;
-  keepAliveComment?: string;
+  disableProxyBuffering?: boolean; // default true
+  keepAliveMs?: number; // default 15000
+  keepAliveComment?: string; // default "keepalive"
   signal?: AbortSignal;
 };
 
@@ -365,7 +365,7 @@ export type ParamsOf<Path extends string> = IsWideString<Path> extends true
 
 export type SchemaLike<T> = { parse: (u: unknown) => T };
 
-type HandlerCtx<Path extends string, State, Vars extends VarsRecord> = {
+export type HandlerCtx<Path extends string, State, Vars extends VarsRecord> = {
   req: Request;
   url: URL;
   params: ParamsOf<Path>;
@@ -410,6 +410,16 @@ export type Handler<
 
 export type Middleware<State, Vars extends VarsRecord> = (
   c: HandlerCtx<string, State, Vars>,
+  next: () => Promise<Response>,
+) => Response | Promise<Response>;
+
+// Per-route middleware: typed to the route's Path so params are strongly typed.
+export type RouteMiddleware<
+  Path extends string,
+  State,
+  Vars extends VarsRecord,
+> = (
+  c: HandlerCtx<Path, State, Vars>,
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
 
@@ -467,6 +477,42 @@ type JoinPath<Base extends string, Path extends string> = `${Base}${Path extends
 const genRequestId = () => (globalThis.crypto?.randomUUID?.() ??
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
+/* =========================
+ * Middleware helpers
+ * ========================= */
+
+// Compose global middleware into a single middleware.
+export const composeMiddleware = <State, Vars extends VarsRecord>(
+  ...mws: Middleware<State, Vars>[]
+): Middleware<State, Vars> =>
+(c, next) => {
+  const run = (i: number): Promise<Response> => {
+    if (i >= mws.length) return next();
+    const mw = mws[i];
+    return Promise.resolve(mw(c, () => run(i + 1)));
+  };
+  return run(0);
+};
+
+// Compose per-route middleware plus final handler.
+const composeRoute = <
+  Path extends string,
+  State,
+  Vars extends VarsRecord,
+>(
+  mws: RouteMiddleware<Path, State, Vars>[],
+  handler: Handler<Path, State, Vars>,
+): (c: HandlerCtx<Path, State, Vars>) => Promise<Response> => {
+  return (c) => {
+    const run = (i: number): Promise<Response> => {
+      if (i >= mws.length) return Promise.resolve(handler(c));
+      const mw = mws[i];
+      return Promise.resolve(mw(c, () => run(i + 1)));
+    };
+    return run(0);
+  };
+};
+
 export const observe = <State, Vars extends VarsRecord>(
   hooks: ObservabilityHooks<State, Vars>,
 ): Middleware<State, Vars> =>
@@ -511,6 +557,15 @@ export class Application<
   readonly #routes: CompiledRoute<State, Vars>[] = [];
   readonly #mw: Array<{ base: string; fn: Middleware<State, Vars> }> = [];
   readonly #stateProvider: StateProvider<State>;
+  #onError?:
+    | ((
+      err: unknown,
+      c: HandlerCtx<string, State, Vars>,
+    ) => Response | Promise<Response>)
+    | undefined;
+  #onNotFound?:
+    | ((c: HandlerCtx<string, State, Vars>) => Response | Promise<Response>)
+    | undefined;
 
   private constructor(stateProvider: StateProvider<State>) {
     this.#stateProvider = stateProvider;
@@ -564,6 +619,25 @@ export class Application<
     return this as unknown as Application<State, Vars & More>;
   }
 
+  // Configure global error handler.
+  onError(
+    fn: (
+      err: unknown,
+      c: HandlerCtx<string, State, Vars>,
+    ) => Response | Promise<Response>,
+  ): this {
+    this.#onError = fn;
+    return this;
+  }
+
+  // Configure global not-found handler.
+  notFound(
+    fn: (c: HandlerCtx<string, State, Vars>) => Response | Promise<Response>,
+  ): this {
+    this.#onNotFound = fn;
+    return this;
+  }
+
   use(fn: Middleware<State, Vars>): this;
   use<Base extends string>(base: Base, fn: Middleware<State, Vars>): this;
   use(a: string | Middleware<State, Vars>, b?: Middleware<State, Vars>): this {
@@ -578,30 +652,123 @@ export class Application<
     return this;
   }
 
-  get<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    return this.#add("GET", path, h);
-  }
-  post<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    return this.#add("POST", path, h);
-  }
-  put<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    return this.#add("PUT", path, h);
-  }
-  patch<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    return this.#add("PATCH", path, h);
-  }
-  delete<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    return this.#add("DELETE", path, h);
+  // Mount a child Application under a base path (sub-app mounting).
+  mount<Base extends string>(
+    base: Base,
+    child: Application<State, Vars>,
+  ): this {
+    const baseNorm = base.endsWith("/") ? base.slice(0, -1) : base;
+    this.use(baseNorm, async (c) => {
+      const url = new URL(c.req.url);
+      const path = url.pathname;
+      const prefix = baseNorm;
+      const newPath = path.startsWith(prefix)
+        ? path.slice(prefix.length) || "/"
+        : path;
+      url.pathname = newPath;
+      const childReq = new Request(url.toString(), c.req);
+      return await child.fetch(childReq);
+    });
+    return this;
   }
 
-  all<Path extends string>(path: Path, h: Handler<Path, State, Vars>): this {
-    this.#add("GET", path, h);
-    this.#add("POST", path, h);
-    this.#add("PUT", path, h);
-    this.#add("PATCH", path, h);
-    this.#add("DELETE", path, h);
-    this.#add("OPTIONS", path, h);
-    this.#add("HEAD", path, h);
+  // Route methods with per-route middleware support:
+  // app.get("/path", handler)
+  // app.get("/path", mw1, mw2, handler)
+  get<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    return this.#add("GET", path, routeMws, h);
+  }
+
+  post<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    return this.#add("POST", path, routeMws, h);
+  }
+
+  put<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    return this.#add("PUT", path, routeMws, h);
+  }
+
+  patch<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    return this.#add("PATCH", path, routeMws, h);
+  }
+
+  delete<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    return this.#add("DELETE", path, routeMws, h);
+  }
+
+  all<Path extends string>(
+    path: Path,
+    ...handlers: [
+      ...RouteMiddleware<Path, State, Vars>[],
+      Handler<Path, State, Vars>,
+    ]
+  ): this {
+    const routeMws = handlers.slice(
+      0,
+      -1,
+    ) as RouteMiddleware<Path, State, Vars>[];
+    const h = handlers[handlers.length - 1] as Handler<Path, State, Vars>;
+    this.#add("GET", path, routeMws, h);
+    this.#add("POST", path, routeMws, h);
+    this.#add("PUT", path, routeMws, h);
+    this.#add("PATCH", path, routeMws, h);
+    this.#add("DELETE", path, routeMws, h);
+    this.#add("OPTIONS", path, routeMws, h);
+    this.#add("HEAD", path, routeMws, h);
     return this;
   }
 
@@ -611,6 +778,45 @@ export class Application<
   ): this {
     fn(new RouteBuilder<State, Vars, Base>(this, base));
     return this;
+  }
+
+  // Simple schema-aware helpers for JSON body routes.
+  postJson<Path extends string, Body>(
+    path: Path,
+    schema: SchemaLike<Body>,
+    handler: (
+      c: HandlerCtx<Path, State, Vars>,
+      body: Body,
+    ) => Response | Promise<Response>,
+    ...mws: RouteMiddleware<Path, State, Vars>[]
+  ): this {
+    return this.post(
+      path,
+      ...mws,
+      async (c) => {
+        const body = await c.readJsonWith(schema);
+        return handler(c, body);
+      },
+    );
+  }
+
+  putJson<Path extends string, Body>(
+    path: Path,
+    schema: SchemaLike<Body>,
+    handler: (
+      c: HandlerCtx<Path, State, Vars>,
+      body: Body,
+    ) => Response | Promise<Response>,
+    ...mws: RouteMiddleware<Path, State, Vars>[]
+  ): this {
+    return this.put(
+      path,
+      ...mws,
+      async (c) => {
+        const body = await c.readJsonWith(schema);
+        return handler(c, body);
+      },
+    );
   }
 
   async fetch(req: Request): Promise<Response> {
@@ -632,7 +838,6 @@ export class Application<
 
     const requestId = genRequestId();
     const vars = Object.create(null) as Vars;
-
     const state = this.#stateProvider.getState(req);
 
     const dispatch = (): Promise<Response> => {
@@ -649,6 +854,18 @@ export class Application<
 
       const allow = this.#allowList(path);
       if (allow) return Promise.resolve(methodNotAllowed(path, allow));
+
+      if (this.#onNotFound) {
+        const ctx = this.#ctx<string>(
+          req,
+          url,
+          params,
+          state,
+          vars,
+          requestId,
+        );
+        return Promise.resolve(this.#onNotFound(ctx));
+      }
 
       return Promise.resolve(
         textResponse(`Not found: ${req.method} ${path}`, 404),
@@ -669,7 +886,22 @@ export class Application<
       return Promise.resolve(fn(ctx, () => run(i + 1)));
     };
 
-    return await run(0);
+    try {
+      return await run(0);
+    } catch (err) {
+      if (this.#onError) {
+        const ctx = this.#ctx<string>(
+          req,
+          url,
+          params,
+          state,
+          vars,
+          requestId,
+        );
+        return await this.#onError(err, ctx);
+      }
+      throw err;
+    }
   }
 
   serve(options?: Deno.ServeOptions): void {
@@ -795,10 +1027,12 @@ export class Application<
   #add<M extends HttpMethod, Path extends string>(
     method: M,
     path: Path,
+    routeMws: RouteMiddleware<Path, State, Vars>[],
     h: Handler<Path, State, Vars>,
   ): this {
     const p = path.startsWith("/") ? path : `/${path}`;
     const { re, keys } = compilePath(p);
+    const composed = composeRoute(routeMws, h);
 
     const handler = async (
       req: Request,
@@ -816,7 +1050,7 @@ export class Application<
         vars,
         requestId,
       );
-      return await h(ctx);
+      return await composed(ctx);
     };
 
     this.#routes.push({ method, template: p, keys, re, handler });
@@ -833,45 +1067,159 @@ export class RouteBuilder<
 
   get<Path extends string>(
     path: Path,
-    h: Handler<JoinPath<Base, Path>, State, Vars>,
+    ...handlers: [
+      ...RouteMiddleware<JoinPath<Base, Path>, State, Vars>[],
+      Handler<JoinPath<Base, Path>, State, Vars>,
+    ]
   ): this {
     const full = withBase(this.base, path) as JoinPath<Base, Path>;
-    this.app.get(full, h);
+    this.app.get(full, ...handlers);
     return this;
   }
+
   post<Path extends string>(
     path: Path,
-    h: Handler<JoinPath<Base, Path>, State, Vars>,
+    ...handlers: [
+      ...RouteMiddleware<JoinPath<Base, Path>, State, Vars>[],
+      Handler<JoinPath<Base, Path>, State, Vars>,
+    ]
   ): this {
     const full = withBase(this.base, path) as JoinPath<Base, Path>;
-    this.app.post(full, h);
+    this.app.post(full, ...handlers);
     return this;
   }
+
   put<Path extends string>(
     path: Path,
-    h: Handler<JoinPath<Base, Path>, State, Vars>,
+    ...handlers: [
+      ...RouteMiddleware<JoinPath<Base, Path>, State, Vars>[],
+      Handler<JoinPath<Base, Path>, State, Vars>,
+    ]
   ): this {
     const full = withBase(this.base, path) as JoinPath<Base, Path>;
-    this.app.put(full, h);
+    this.app.put(full, ...handlers);
     return this;
   }
+
   patch<Path extends string>(
     path: Path,
-    h: Handler<JoinPath<Base, Path>, State, Vars>,
+    ...handlers: [
+      ...RouteMiddleware<JoinPath<Base, Path>, State, Vars>[],
+      Handler<JoinPath<Base, Path>, State, Vars>,
+    ]
   ): this {
     const full = withBase(this.base, path) as JoinPath<Base, Path>;
-    this.app.patch(full, h);
+    this.app.patch(full, ...handlers);
     return this;
   }
+
   delete<Path extends string>(
     path: Path,
-    h: Handler<JoinPath<Base, Path>, State, Vars>,
+    ...handlers: [
+      ...RouteMiddleware<JoinPath<Base, Path>, State, Vars>[],
+      Handler<JoinPath<Base, Path>, State, Vars>,
+    ]
   ): this {
     const full = withBase(this.base, path) as JoinPath<Base, Path>;
-    this.app.delete(full, h);
+    this.app.delete(full, ...handlers);
     return this;
   }
 }
+
+/* =========================
+ * Simple built-in middleware
+ * ========================= */
+
+// Basic request logger (method, path, status, ms, requestId).
+export const logger = <State, Vars extends VarsRecord>(): Middleware<
+  State,
+  Vars
+> =>
+async (c, next) => {
+  const start = performance.now();
+  const method = c.req.method;
+  const { pathname } = c.url;
+  try {
+    const res = await next();
+    const ms = (performance.now() - start).toFixed(1);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[${c.requestId}] ${method} ${pathname} -> ${res.status} ${ms}ms`,
+    );
+    return res;
+  } catch (err) {
+    const ms = (performance.now() - start).toFixed(1);
+    // eslint-disable-next-line no-console
+    console.error(
+      `[${c.requestId}] ${method} ${pathname} ERROR ${ms}ms`,
+      err,
+    );
+    throw err;
+  }
+};
+
+// Attach x-request-id response header.
+export const requestIdHeader = <State, Vars extends VarsRecord>(): Middleware<
+  State,
+  Vars
+> =>
+async (c, next) => {
+  const res = await next();
+  const headers = new Headers(res.headers);
+  headers.set("x-request-id", c.requestId);
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+};
+
+export type SimpleCorsOptions = {
+  origin?: string; // default "*"
+  allowMethods?: HttpMethod[]; // default common methods
+  allowHeaders?: string[]; // default "*"
+};
+
+export const cors = <State, Vars extends VarsRecord>(
+  opts: SimpleCorsOptions = {},
+): Middleware<State, Vars> => {
+  const origin = opts.origin ?? "*";
+  const allowMethods = opts.allowMethods ?? [
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ];
+  const allowHeaders = opts.allowHeaders ?? ["*"];
+
+  return async (c, next) => {
+    const reqMethod = c.req.method.toUpperCase();
+
+    const baseHeaders: HeadersInit = {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": allowMethods.join(", "),
+      "access-control-allow-headers": allowHeaders.join(", "),
+    };
+
+    if (reqMethod === "OPTIONS") {
+      return textResponse("", 204, baseHeaders);
+    }
+
+    const res = await next();
+    const headers = new Headers(res.headers);
+    for (const [k, v] of Object.entries(baseHeaders)) {
+      headers.set(k, v);
+    }
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+};
 
 /* =========================
  * 404 helper (kept)

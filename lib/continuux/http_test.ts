@@ -1,6 +1,6 @@
 // lib/continuux/http_test.ts
 //
-// Deno tests for lib/http/server.ts
+// Deno tests for lib/continuux/http.ts
 //
 // Run with:
 //   deno test -A lib/continuux/http_test.ts
@@ -11,12 +11,19 @@
 
 import {
   Application,
+  composeMiddleware,
+  cors,
+  HandlerCtx,
   htmlResponse,
   jsonResponse,
   jsResponse,
+  logger,
   methodNotAllowed,
+  Middleware,
   notFoundPureTsUi,
   observe,
+  requestIdHeader,
+  RouteMiddleware,
   sseEvery,
   sseSession,
   textResponse,
@@ -244,6 +251,56 @@ Deno.test("sseSession basic behavior: send, keepalive, close behavior", async (t
   });
 });
 
+Deno.test("composeMiddleware runs middlewares in expected order", async () => {
+  const order: string[] = [];
+
+  // deno-lint-ignore ban-types
+  const mw1: Middleware<{}, {}> = async (_c, next) => {
+    order.push("mw1:before");
+    const res = await next();
+    order.push("mw1:after");
+    return res;
+  };
+
+  // deno-lint-ignore ban-types
+  const mw2: Middleware<{}, {}> = async (_c, next) => {
+    order.push("mw2:before");
+    const res = await next();
+    order.push("mw2:after");
+    return res;
+  };
+
+  // deno-lint-ignore ban-types
+  const composed = composeMiddleware<{}, {}>(mw1, mw2);
+
+  // deno-lint-ignore ban-types
+  const c = {} as HandlerCtx<string, {}, {}>;
+
+  const r = await composed(
+    c,
+    () => {
+      order.push("handler");
+      return Promise.resolve(new Response("ok"));
+    },
+  );
+
+  const text = await r.text();
+  if (text !== "ok") throw new Error("response body mismatch");
+
+  const expected = [
+    "mw1:before",
+    "mw2:before",
+    "handler",
+    "mw2:after",
+    "mw1:after",
+  ];
+  if (order.join(",") !== expected.join(",")) {
+    throw new Error(
+      `order mismatch: ${order.join(",")} vs ${expected.join(",")}`,
+    );
+  }
+});
+
 Deno.test(
   "Router, params, middleware, typed vars, method not allowed, SSE (end-to-end server)",
   async (t) => {
@@ -425,6 +482,237 @@ Deno.test(
       });
     } finally {
       await server.close();
+    }
+  },
+);
+
+Deno.test(
+  "middleware, error handling, mount, schema helpers, CORS, requestIdHeader, logger",
+  async (t) => {
+    type State = { tag: string };
+
+    // Capture logs instead of emitting them.
+    const capturedLogs: string[] = [];
+    const capturedErrors: string[] = [];
+    const origLog = console.log;
+    const origError = console.error;
+
+    console.log = (...args: unknown[]) => {
+      capturedLogs.push(args.map((a) => String(a)).join(" "));
+    };
+    console.error = (...args: unknown[]) => {
+      capturedErrors.push(args.map((a) => String(a)).join(" "));
+    };
+
+    try {
+      const app = Application.sharedState<State>({ tag: "root" }).withVars<
+        { auth?: string }
+      >();
+
+      app.use(logger());
+      app.use(requestIdHeader());
+      app.use(cors());
+
+      app.onError((err, c) => {
+        const msg = String(err instanceof Error ? err.message : err);
+        return c.text(`handled:${msg}`, { status: 500 });
+      });
+
+      app.notFound((c) => c.text("nf", { status: 404 }));
+
+      // Route-level middleware ordering
+      const order: string[] = [];
+
+      // deno-lint-ignore no-explicit-any
+      const mw1: RouteMiddleware<"/mw/:id", State, any> = async (c, next) => {
+        order.push(`mw1:${c.params.id}`);
+        const res = await next();
+        order.push("mw1-after");
+        return res;
+      };
+
+      app.get("/mw/:id", mw1, (c) => {
+        order.push(`handler:${c.params.id}`);
+        return c.text("ok");
+      });
+
+      // Schema-aware helpers
+      const schema = {
+        parse(u: unknown): { n: string } {
+          const v = u as { n?: unknown };
+          if (typeof v.n !== "string") throw new Error("bad-body");
+          return { n: v.n };
+        },
+      };
+
+      app.postJson(
+        "/json",
+        schema,
+        (c, body) => c.json({ got: body.n, method: c.req.method }),
+      );
+
+      app.putJson(
+        "/json",
+        schema,
+        (c, body) => c.json({ got: body.n, method: c.req.method }),
+      );
+
+      // Simple route to inspect headers (CORS, requestIdHeader)
+      app.get("/cors", (c) => c.text("ok"));
+
+      // Route that throws to hit onError
+      app.get("/boom", () => {
+        throw new Error("boom");
+      });
+
+      // Child app mounted under /child
+      const child = Application.sharedState<State>({ tag: "child" });
+      child.get(
+        "/info",
+        (c) => c.json({ path: c.url.pathname, tag: c.state.tag }),
+      );
+      app.mount("/child", child);
+
+      const server = startServer((req) => app.fetch(req));
+
+      try {
+        await t.step("route-level middleware runs around handler", async () => {
+          const r = await fetch(`${server.baseUrl}/mw/123`);
+          const body = await r.text();
+          if (body !== "ok") throw new Error("body mismatch");
+          const expected = ["mw1:123", "handler:123", "mw1-after"];
+          if (order.join(",") !== expected.join(",")) {
+            throw new Error(
+              `route mw order mismatch: ${order.join(",")} vs ${
+                expected.join(",")
+              }`,
+            );
+          }
+        });
+
+        await t.step(
+          "postJson and putJson use schema and return body",
+          async () => {
+            const r1 = await fetch(`${server.baseUrl}/json`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ n: "P" }),
+            });
+            const j1 = await r1.json();
+            if (j1.got !== "P" || j1.method !== "POST") {
+              throw new Error("postJson response mismatch");
+            }
+            await drain(r1);
+
+            const r2 = await fetch(`${server.baseUrl}/json`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ n: "U" }),
+            });
+            const j2 = await r2.json();
+            if (j2.got !== "U" || j2.method !== "PUT") {
+              throw new Error("putJson response mismatch");
+            }
+            await drain(r2);
+          },
+        );
+
+        await t.step("CORS middleware handles OPTIONS preflight", async () => {
+          const r = await fetch(`${server.baseUrl}/json`, {
+            method: "OPTIONS",
+          });
+          if (r.status !== 204) throw new Error("expected 204 for OPTIONS");
+          const acao = r.headers.get("access-control-allow-origin");
+          if (!acao) throw new Error("missing CORS allow-origin");
+          const methods = r.headers.get("access-control-allow-methods") ?? "";
+          if (!methods.includes("POST") || !methods.includes("PUT")) {
+            throw new Error("missing CORS allow-methods");
+          }
+          await r.text(); // consume
+        });
+
+        await t.step(
+          "CORS + requestIdHeader present on normal route",
+          async () => {
+            const r = await fetch(`${server.baseUrl}/cors`);
+            const body = await r.text();
+            if (body !== "ok") throw new Error("body mismatch");
+            const acao = r.headers.get("access-control-allow-origin");
+            if (!acao) throw new Error("missing CORS header on GET");
+            const rid = r.headers.get("x-request-id");
+            if (!rid || rid.length === 0) {
+              throw new Error("missing x-request-id header");
+            }
+          },
+        );
+
+        await t.step(
+          "onError handler converts thrown error to 500 response",
+          async () => {
+            const r = await fetch(`${server.baseUrl}/boom`);
+            const body = await r.text();
+            if (r.status !== 500) throw new Error("expected 500 status");
+            if (!body.startsWith("handled:")) {
+              throw new Error("onError did not handle error as expected");
+            }
+          },
+        );
+
+        await t.step("notFound handler handles unknown routes", async () => {
+          const r = await fetch(`${server.baseUrl}/no-such-route`);
+          const body = await r.text();
+          if (r.status !== 404) throw new Error("expected 404");
+          if (body !== "nf") throw new Error("notFound body mismatch");
+        });
+
+        await t.step("mount() routes child app under base path", async () => {
+          const r = await fetch(`${server.baseUrl}/child/info`);
+          const j = await r.json();
+          if (j.path !== "/info") throw new Error("mounted path mismatch");
+          if (j.tag !== "child") throw new Error("mounted state mismatch");
+        });
+
+        await t.step(
+          "logger produced expected log lines (captured, not printed)",
+          () => {
+            const hasMw = capturedLogs.some((l) =>
+              l.includes("GET /mw/123 -> 200")
+            );
+            const hasPostJson = capturedLogs.some((l) =>
+              l.includes("POST /json -> 200")
+            );
+            const hasPutJson = capturedLogs.some((l) =>
+              l.includes("PUT /json -> 200")
+            );
+            const hasOptionsJson = capturedLogs.some((l) =>
+              l.includes("OPTIONS /json -> 204")
+            );
+            const hasCors = capturedLogs.some((l) =>
+              l.includes("GET /cors -> 200")
+            );
+            const hasBoomError = capturedErrors.some((l) =>
+              l.includes("GET /boom ERROR") && l.includes("Error: boom")
+            );
+
+            if (!hasMw) throw new Error("missing log for GET /mw/123");
+            if (!hasPostJson) throw new Error("missing log for POST /json");
+            if (!hasPutJson) throw new Error("missing log for PUT /json");
+            if (!hasOptionsJson) {
+              throw new Error("missing log for OPTIONS /json");
+            }
+            if (!hasCors) throw new Error("missing log for GET /cors");
+            if (!hasBoomError) {
+              throw new Error("missing error log for GET /boom");
+            }
+          },
+        );
+      } finally {
+        await server.close();
+      }
+    } finally {
+      // Restore console to avoid affecting other tests.
+      console.log = origLog;
+      console.error = origError;
     }
   },
 );
