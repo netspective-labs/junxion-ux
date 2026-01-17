@@ -122,7 +122,9 @@ Deno.test("autoTsJsBundler middleware bundles client modules", async () => {
       const body = await res.text();
       assertMatch(body, /hello-from-client/);
     } else {
-      console.error("Deno.bundle() not found!?");
+      console.error(
+        "Deno.bundle() not found: did you pass in --unstable-bundle?",
+      );
     }
   } finally {
     await Deno.remove(dir, { recursive: true });
