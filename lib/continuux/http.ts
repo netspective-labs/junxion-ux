@@ -98,119 +98,8 @@ export type EmptyRecord = Record<PropertyKey, never>;
 export type AnyParams = Record<string, string>;
 export type VarsRecord = Record<string, unknown>;
 
-const asError = (err: unknown) =>
+export const asError = (err: unknown) =>
   err instanceof Error ? err : new Error(String(err));
-
-const stackIfAny = (err: Error) => (err.stack ? `\n\n${err.stack}` : "");
-
-/* =========================
- * in-memory bundling
- * ========================= */
-
-export type BundleOptions = {
-  cacheKey?: string;
-  minify?: boolean;
-  cacheControl?: string; // default "no-store"
-};
-
-export type BundleOk = { ok: true; js: string; cacheKey: string };
-export type BundleErr = {
-  ok: false;
-  status: number;
-  message: string;
-  details?: string;
-};
-export type BundleResult = BundleOk | BundleErr;
-
-export type InMemoryBundlerConfig = {
-  defaultMinify?: boolean;
-};
-
-export class InMemoryBundler {
-  readonly #cache = new Map<string, string>();
-  readonly #defaultMinify: boolean;
-
-  constructor(cfg: InMemoryBundlerConfig = {}) {
-    this.#defaultMinify = cfg.defaultMinify ?? true;
-  }
-
-  get cacheSize(): number {
-    return this.#cache.size;
-  }
-
-  clearCache(): void {
-    this.#cache.clear();
-  }
-
-  prime(cacheKey: string, js: string): void {
-    this.#cache.set(cacheKey, js);
-  }
-
-  peek(cacheKey: string): string | undefined {
-    return this.#cache.get(cacheKey);
-  }
-
-  async bundle(entry: string, opts: BundleOptions = {}): Promise<BundleResult> {
-    const cacheKey = opts.cacheKey ?? entry;
-    const cached = this.#cache.get(cacheKey);
-    if (cached) return { ok: true, js: cached, cacheKey };
-
-    let result: Awaited<ReturnType<typeof Deno.bundle>>;
-    try {
-      result = await Deno.bundle({
-        entrypoints: [entry],
-        outputDir: "dist",
-        platform: "browser",
-        minify: opts.minify ?? this.#defaultMinify,
-        write: false,
-      });
-    } catch (err) {
-      const e = asError(err);
-      return {
-        ok: false,
-        status: 500,
-        message:
-          `Bundle error: Deno.bundle failed\n\nEntry:\n${entry}\n\n${e.message}${
-            stackIfAny(e)
-          }`,
-      };
-    }
-
-    const outputs = result.outputFiles ?? [];
-    if (outputs.length === 0) {
-      return {
-        ok: false,
-        status: 500,
-        message:
-          `Bundle error: no output files produced\n\nEntry:\n${entry}\n\nTip: verify the module exists and that imports resolve.`,
-      };
-    }
-
-    const jsFile = outputs.find((f) => f.path.endsWith(".js")) ?? outputs[0];
-    const jsText = jsFile?.text?.() ?? "";
-    if (!jsText.trim()) {
-      return {
-        ok: false,
-        status: 500,
-        message:
-          `Bundle error: JavaScript output is empty\n\nEntry:\n${entry}\n\nTip: check import graph and bundler errors.`,
-      };
-    }
-
-    this.#cache.set(cacheKey, jsText);
-    return { ok: true, js: jsText, cacheKey };
-  }
-
-  async jsModuleResponse(
-    entry: string,
-    opts: BundleOptions = {},
-  ): Promise<Response> {
-    const r = await this.bundle(entry, opts);
-    if (!r.ok) return textResponse(r.message, r.status);
-    const cc = opts.cacheControl ?? "no-store";
-    return jsResponse(r.js, cc);
-  }
-}
 
 /* =========================
  * SSE (type-safe + abort-aware)
@@ -497,12 +386,12 @@ export type Handler<
   c: HandlerCtx<Path, State, Vars>,
 ) => Response | Promise<Response>;
 
-type Middleware<State, Vars extends VarsRecord> = (
+export type Middleware<State, Vars extends VarsRecord> = (
   c: HandlerCtx<string, State, Vars>,
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
 
-type CompiledRoute<State, Vars extends VarsRecord> = {
+export type CompiledRoute<State, Vars extends VarsRecord> = {
   method: HttpMethod;
   template: string;
   keys: string[];
@@ -702,14 +591,9 @@ export class Application<
     const method = req.method.toUpperCase() as HttpMethod;
     const path = url.pathname;
 
+    // Match first so params are available to middleware (like Hono).
     const match = this.#match(method, path);
-    if (!match) {
-      const allow = this.#allowList(path);
-      if (allow) return methodNotAllowed(path, allow);
-      return textResponse(`Not found: ${req.method} ${path}`, 404);
-    }
-
-    const { route, params } = match;
+    const params = match?.params ?? ({} as AnyParams);
 
     const mw = this.#mw
       .filter((m) =>
@@ -726,10 +610,28 @@ export class Application<
     // Explicit, per-request state creation.
     const state = this.#stateProvider.getState(req);
 
-    const run = (i: number): Promise<Response> => {
-      if (i >= mw.length) {
-        return route.handler(req, url, params, state, vars, requestId);
+    const dispatch = (): Promise<Response> => {
+      if (match) {
+        return match.route.handler(
+          req,
+          url,
+          match.params,
+          state,
+          vars,
+          requestId,
+        );
       }
+
+      const allow = this.#allowList(path);
+      if (allow) return Promise.resolve(methodNotAllowed(path, allow));
+
+      return Promise.resolve(
+        textResponse(`Not found: ${req.method} ${path}`, 404),
+      );
+    };
+
+    const run = (i: number): Promise<Response> => {
+      if (i >= mw.length) return dispatch();
       const ctx = this.#ctx(req, url, params, state, vars, requestId);
       const fn = mw[i];
       return Promise.resolve(fn(ctx, () => run(i + 1)));

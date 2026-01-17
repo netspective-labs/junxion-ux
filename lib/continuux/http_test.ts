@@ -12,7 +12,6 @@
 import {
   Application,
   htmlResponse,
-  InMemoryBundler,
   jsonResponse,
   jsResponse,
   methodNotAllowed,
@@ -153,11 +152,6 @@ const readSseUntil = async (
   return await withTimeout(run, ms, "SSE read timeout");
 };
 
-const hasDenoBundle = (): boolean => {
-  const d = Deno as unknown as { bundle?: unknown };
-  return typeof d.bundle === "function";
-};
-
 Deno.test("response helpers set correct content-type and body", async (t) => {
   await t.step("textResponse", async () => {
     const r = textResponse("hi");
@@ -216,123 +210,6 @@ Deno.test("response helpers set correct content-type and body", async (t) => {
     }
   });
 });
-
-Deno.test(
-  "InMemoryBundler bundles (or fails predictably), caches, primes, and clears",
-  async (t) => {
-    const dir = await Deno.makeTempDir({ prefix: "jx-bundler-test-" });
-    try {
-      const entry = `${dir}/entry.ts`;
-      const dep = `${dir}/dep.ts`;
-
-      await Deno.writeTextFile(dep, `export const msg = "bundled-ok";\n`);
-      await Deno.writeTextFile(
-        entry,
-        [
-          `import { msg } from "./dep.ts";`,
-          `console.log(msg);`,
-          `export const value = msg;`,
-          ``,
-        ].join("\n"),
-      );
-
-      const bundler = new InMemoryBundler({ defaultMinify: false });
-      const bundleEnabled = hasDenoBundle();
-
-      await t.step(
-        bundleEnabled
-          ? "bundle produces JS"
-          : "bundle produces JS (expected to fail)",
-        async () => {
-          const r = await bundler.bundle(entry, {
-            cacheKey: "k1",
-            minify: false,
-          });
-          if (bundleEnabled) {
-            if (!r.ok) throw new Error(r.message);
-            if (!r.js.includes("bundled-ok")) {
-              throw new Error("expected bundled string");
-            }
-            if (bundler.cacheSize !== 1) throw new Error("cacheSize mismatch");
-          } else {
-            if (r.ok) {
-              throw new Error(
-                "expected bundling to fail without --unstable-bundle",
-              );
-            }
-            if (r.status !== 500) throw new Error("expected status 500");
-            if (!r.message.includes("Bundle error: Deno.bundle failed")) {
-              throw new Error("unexpected message");
-            }
-          }
-        },
-      );
-
-      await t.step(
-        bundleEnabled
-          ? "bundle hits cache via cacheKey"
-          : "bundle hits cache via cacheKey (expected to fail)",
-        async () => {
-          const r = await bundler.bundle(entry, { cacheKey: "k1" });
-          if (bundleEnabled) {
-            if (!r.ok) throw new Error(r.message);
-            if (bundler.cacheSize !== 1) {
-              throw new Error("cache should not grow");
-            }
-          } else {
-            if (r.ok) throw new Error("expected failure");
-          }
-        },
-      );
-
-      await t.step("prime and peek", () => {
-        bundler.prime("k2", "console.log('primed')");
-        const p = bundler.peek("k2");
-        if (p !== "console.log('primed')") throw new Error("peek mismatch");
-      });
-
-      await t.step("clearCache", () => {
-        bundler.clearCache();
-        if (bundler.cacheSize !== 0) throw new Error("clearCache failed");
-      });
-
-      await t.step(
-        bundleEnabled
-          ? "jsModuleResponse returns jsResponse on success"
-          : "jsModuleResponse returns error response when bundling unavailable",
-        async () => {
-          const r = await bundler.jsModuleResponse(entry, {
-            cacheControl: "no-store",
-            minify: false,
-          });
-
-          if (bundleEnabled) {
-            if (r.status !== 200) throw new Error("status mismatch");
-            if (
-              r.headers.get("content-type") !== "text/javascript; charset=utf-8"
-            ) {
-              throw new Error("content-type mismatch");
-            }
-            const body = await r.text();
-            if (!body.includes("bundled-ok")) {
-              throw new Error("body missing bundled output");
-            }
-          } else {
-            if (r.status !== 500) {
-              throw new Error("expected 500 without bundling enabled");
-            }
-            const body = await r.text();
-            if (!body.includes("Deno.bundle")) {
-              throw new Error("expected Deno.bundle mention");
-            }
-          }
-        },
-      );
-    } finally {
-      await Deno.remove(dir, { recursive: true });
-    }
-  },
-);
 
 Deno.test("sseSession basic behavior: send, keepalive, close behavior", async (t) => {
   await t.step(
