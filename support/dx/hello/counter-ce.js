@@ -2,8 +2,7 @@
 /// <reference lib="dom.iterable" />
 // support/dx/hello/counter-ce.js
 //
-// Minimal <counter-ce>. CxAide owns sessionId, SSE, and POST wiring.
-// This is the developer-expected usage: no manual EventSource or fetch boilerplate.
+// Minimal <counter-ce> using CxAide convenience binds.
 
 import { customElementAide } from "../../../lib/continuux/browser-ua-aide.js";
 
@@ -33,78 +32,24 @@ export class CounterCe extends HTMLElement {
     this.attachShadow({ mode: "open" }).append(tpl.content.cloneNode(true));
   }
 
-  get #countEl() {
-    return this.shadowRoot?.getElementById("count") ?? null;
-  }
-  get #statusEl() {
-    return this.shadowRoot?.getElementById("status") ?? null;
-  }
-  get #incBtn() {
-    return this.shadowRoot?.getElementById("inc") ?? null;
-  }
-  get #resetBtn() {
-    return this.shadowRoot?.getElementById("reset") ?? null;
-  }
-
-  set count(v) {
-    const el = this.#countEl;
-    if (el) el.textContent = String(v);
-  }
-  set status(v) {
-    const el = this.#statusEl;
-    if (el) el.textContent = String(v ?? "");
-  }
-
   connectedCallback() {
-    const cx = this.cxAide; // provided by customElementAide (cached per element)
-    if (!cx) {
-      this.status = "missing cxAide";
-      return;
-    }
-
-    // Typed-ish: event name strings match your SSE event map on the server.
-    cx.on(
-      "count",
-      (d) => (this.count = d && typeof d.value === "number" ? d.value : 0),
-    );
-    cx.on(
-      "status",
-      (d) => (this.status = d && d.text != null ? String(d.text) : ""),
-    );
-
-    this.#incBtn?.addEventListener("click", () => this.#act("increment"));
-    this.#resetBtn?.addEventListener("click", () => this.#act("reset"));
-
-    this.status = "connecting…";
-    cx.sseConnect(); // reads data-sse-url (+ sessionId auto) and opens EventSource
-  }
-
-  disconnectedCallback() {
-    // Fine if used unwrapped; wrapper also disconnects.
-    try {
-      this.cxAide?.sseDisconnect?.();
-    } catch {
-      // ignore
-    }
-  }
-
-  #act(action) {
     const cx = this.cxAide;
     if (!cx) return;
 
-    this.status = `sending:${action}`;
-    try {
-      // Developer-expected: cx.action("increment") posts { action: "increment" }
-      // to data-action-url, plus sessionId if your aide adds it.
-      const p = cx.action(action);
-      p?.catch?.((e) => (this.status = `error:${String(e?.message || e)}`));
-    } catch (e) {
-      this.status = `error:${String(e?.message || e)}`;
-    }
+    cx.unbindLocal(); // in case of re-connect
+    cx.bindText("count", "count", (d) => d?.value ?? 0);
+    cx.bindText("status", "status", (d) => d?.text ?? "");
+    cx.bindAction("inc", "increment");
+    cx.bindAction("reset", "reset");
+
+    cx.sseConnect();
+  }
+
+  disconnectedCallback() {
+    this.cxAide?.sseDisconnect?.();
+    this.cxAide?.unbindLocal?.();
   }
 }
 
-const aide = customElementAide(CounterCe, "counter-ce");
-
-// Keep a single exported registration function for SSR boot scripts.
-export const registerCounterCe = () => aide.register();
+export const registerCounterCe = () =>
+  customElementAide(CounterCe, "counter-ce").register();
