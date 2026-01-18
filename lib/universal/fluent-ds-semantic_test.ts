@@ -28,7 +28,7 @@ import {
   span,
   ul,
   type VariantFn,
-} from "./fluent-ds-sematic.ts";
+} from "./fluent-ds-semantic.ts";
 
 /* --------------------------------- Logging -------------------------------- */
 
@@ -502,7 +502,7 @@ Deno.test("semanticLayout(): dependencies", () => {
   assertEquals(
     Array.from(defaultPage.dependencies),
     [{
-      source: "lib/universal/fluent-ds-sematic.css",
+      source: "lib/universal/fluent-ds-semantic.css",
       mount: "/fluent-ds/semantic.css",
     }],
   );

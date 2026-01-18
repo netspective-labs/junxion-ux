@@ -722,7 +722,7 @@ export function semanticLayout<
   const stylesheetSource = stylesheetHref.startsWith("http://") ||
       stylesheetHref.startsWith("https://")
     ? stylesheetHref
-    : "lib/universal/fluent-ds-sematic.css";
+    : "lib/universal/fluent-ds-semantic.css";
 
   const parts = init.shell({
     header: ds.header,
