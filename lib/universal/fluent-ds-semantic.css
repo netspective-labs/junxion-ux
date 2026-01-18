@@ -14,10 +14,10 @@
   --ds-accent-ink: #0b1f1f;
   --ds-ring: #14b8a6;
 
-  --ds-radius: 16px;
-  --ds-radius-sm: 10px;
-  --ds-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --ds-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --ds-radius: 12px;
+  --ds-radius-sm: 8px;
+  --ds-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  --ds-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.05);
 
   --ds-gap-1: 6px;
   --ds-gap-2: 10px;
@@ -46,7 +46,7 @@ body.ds-body {
   font-family: var(--ds-font-sans);
   color: var(--ds-ink);
   background:
-    radial-gradient(circle at top, #f4f8ff 0%, #f7fbf9 45%, #ffffff 100%),
+    radial-gradient(circle at top, #f6fbff 0%, #f9fcfb 50%, #ffffff 100%),
     linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   line-height: 1.6;
   min-height: 100vh;
@@ -57,7 +57,7 @@ body {
   font-family: var(--ds-font-sans);
   color: var(--ds-ink);
   background:
-    radial-gradient(circle at top, #f4f8ff 0%, #f7fbf9 45%, #ffffff 100%),
+    radial-gradient(circle at top, #f6fbff 0%, #f9fcfb 50%, #ffffff 100%),
     linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   line-height: 1.6;
   min-height: 100vh;
@@ -111,21 +111,14 @@ footer {
   border-radius: var(--ds-radius);
 }
 
-ol,
-ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 /* Base semantic layout for bare markup (no classes) */
-body > header,
-body > footer {
+body > header:not([class]),
+body > footer:not([class]) {
   padding: var(--ds-gap-4) var(--ds-gap-5);
 }
 
-body > main,
-body > section {
+body > main:not([class]),
+body > section:not([class]) {
   max-width: var(--ds-max-width);
   margin: var(--ds-gap-5) auto;
   padding: var(--ds-gap-5);
@@ -134,27 +127,27 @@ body > section {
   box-shadow: var(--ds-shadow);
 }
 
-body > main > header,
-body > section > header {
+body > main:not([class]) > header,
+body > section:not([class]) > header {
   margin-bottom: var(--ds-gap-4);
 }
 
-body > main > header h1,
-body > section > header h1,
-body > main > header h2,
-body > section > header h2 {
+body > main:not([class]) > header h1,
+body > section:not([class]) > header h1,
+body > main:not([class]) > header h2,
+body > section:not([class]) > header h2 {
   font-family: var(--ds-font-serif);
   margin: 0 0 var(--ds-gap-2);
 }
 
-body > main > header p,
-body > section > header p {
+body > main:not([class]) > header p,
+body > section:not([class]) > header p {
   margin: 0;
   color: var(--ds-muted);
 }
 
-body > main > section,
-body > section > section {
+body > main:not([class]) > section,
+body > section:not([class]) > section {
   margin-top: var(--ds-gap-4);
   padding: var(--ds-gap-4);
   border: 1px solid var(--ds-line);
@@ -162,16 +155,19 @@ body > section > section {
   background: var(--ds-surface-2);
 }
 
-body > header nav ul,
-body > footer nav ul {
+body > header:not([class]) nav ul,
+body > footer:not([class]) nav ul {
   display: flex;
   gap: var(--ds-gap-3);
   flex-wrap: wrap;
   align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-body > header nav a,
-body > footer nav a {
+body > header:not([class]) nav a,
+body > footer:not([class]) nav a {
   color: var(--ds-ink);
 }
 
@@ -309,10 +305,10 @@ body > footer nav a {
 
 .ds-content-inner {
   background: var(--ds-surface);
-  border: 1px solid var(--ds-line);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: var(--ds-radius);
-  padding: var(--ds-gap-5);
-  box-shadow: var(--ds-shadow);
+  padding: clamp(20px, 3vw, 36px);
+  box-shadow: var(--ds-shadow-soft);
 }
 
 .ds-page-header {
@@ -325,7 +321,8 @@ body > footer nav a {
 
 .ds-page-title {
   font-family: var(--ds-font-serif);
-  font-size: clamp(22px, 2.4vw, 32px);
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: 0.2px;
   margin: 0;
 }
 
@@ -343,6 +340,72 @@ body > footer nav a {
 .ds-content-body {
   display: grid;
   gap: var(--ds-gap-4);
+  font-size: 1rem;
+  color: var(--ds-ink);
+}
+
+.ds-content-body h1,
+.ds-content-body h2,
+.ds-content-body h3,
+.ds-content-body h4 {
+  font-family: var(--ds-font-serif);
+  margin: 0 0 var(--ds-gap-2);
+}
+
+.ds-content-body p {
+  margin: 0 0 var(--ds-gap-3);
+  color: var(--ds-muted);
+}
+
+.ds-content-body ul,
+.ds-content-body ol {
+  margin: 0 0 var(--ds-gap-3);
+  padding-left: 1.25rem;
+}
+
+.ds-content-body ul {
+  list-style: disc;
+}
+
+.ds-content-body ol {
+  list-style: decimal;
+}
+
+.ds-content-body li {
+  margin-bottom: var(--ds-gap-1);
+}
+
+.ds-content-body code {
+  font-family: var(--ds-font-mono);
+  background: #f1f5f9;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+
+.ds-content-body pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: var(--ds-gap-3);
+  border-radius: var(--ds-radius-sm);
+  overflow-x: auto;
+}
+
+.ds-content-body blockquote {
+  margin: 0;
+  padding-left: var(--ds-gap-3);
+  border-left: 3px solid var(--ds-line);
+  color: var(--ds-subtle);
+}
+
+.ds-content-body #status {
+  font-size: 0.9rem;
+  color: var(--ds-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ds-content-body #content {
+  color: var(--ds-ink);
 }
 
 .ds-section {
@@ -397,18 +460,44 @@ body > footer nav a {
 .ds-footer-empty {
   max-width: var(--ds-max-width);
   margin: 0 auto;
-  padding: var(--ds-gap-4) var(--ds-gap-5);
+  padding: var(--ds-gap-2) var(--ds-gap-5);
 }
 
 /* Centered layout */
 .ds-centered {
   display: grid;
-  gap: var(--ds-gap-5);
+  gap: var(--ds-gap-4);
+  padding: var(--ds-gap-4) 0 var(--ds-gap-6);
 }
 
 .ds-centered-container {
-  max-width: min(760px, 92vw);
-  margin: 0 auto var(--ds-gap-6);
+  max-width: min(860px, 92vw);
+  margin: 0 auto;
+}
+
+.ds-centered .ds-header,
+.ds-centered .ds-footer {
+  background: transparent;
+  border: none;
+}
+
+.ds-centered .ds-header-inner,
+.ds-centered .ds-footer-inner {
+  padding: var(--ds-gap-3) var(--ds-gap-4);
+  justify-content: center;
+}
+
+.ds-centered .ds-content-inner {
+  box-shadow: var(--ds-shadow-soft);
+}
+
+.ds-centered .ds-page-header {
+  justify-content: center;
+  text-align: center;
+}
+
+.ds-centered .ds-page-description {
+  max-width: 540px;
 }
 
 /* Marketing layout */
@@ -478,13 +567,13 @@ body > footer nav a {
 }
 
 @media (max-width: 720px) {
-  body > header,
-  body > footer {
+  body > header:not([class]),
+  body > footer:not([class]) {
     padding: var(--ds-gap-3);
   }
 
-  body > main,
-  body > section {
+  body > main:not([class]),
+  body > section:not([class]) {
     margin: var(--ds-gap-3) var(--ds-gap-3);
     padding: var(--ds-gap-4);
   }
