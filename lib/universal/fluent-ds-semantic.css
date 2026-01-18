@@ -52,6 +52,17 @@ body.ds-body {
   min-height: 100vh;
 }
 
+body {
+  margin: 0;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-ink);
+  background:
+    radial-gradient(circle at top, #f4f8ff 0%, #f7fbf9 45%, #ffffff 100%),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
 img,
 svg,
 video {
@@ -74,6 +85,94 @@ button:focus-visible,
   outline: 2px solid var(--ds-ring);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+header,
+footer {
+  background: var(--ds-surface);
+  border-bottom: 1px solid var(--ds-line);
+}
+
+footer {
+  border-top: 1px solid var(--ds-line);
+  border-bottom: none;
+}
+
+main {
+  min-width: 0;
+}
+
+section,
+nav,
+aside,
+main,
+header,
+footer {
+  border-radius: var(--ds-radius);
+}
+
+ol,
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Base semantic layout for bare markup (no classes) */
+body > header,
+body > footer {
+  padding: var(--ds-gap-4) var(--ds-gap-5);
+}
+
+body > main,
+body > section {
+  max-width: var(--ds-max-width);
+  margin: var(--ds-gap-5) auto;
+  padding: var(--ds-gap-5);
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-line);
+  box-shadow: var(--ds-shadow);
+}
+
+body > main > header,
+body > section > header {
+  margin-bottom: var(--ds-gap-4);
+}
+
+body > main > header h1,
+body > section > header h1,
+body > main > header h2,
+body > section > header h2 {
+  font-family: var(--ds-font-serif);
+  margin: 0 0 var(--ds-gap-2);
+}
+
+body > main > header p,
+body > section > header p {
+  margin: 0;
+  color: var(--ds-muted);
+}
+
+body > main > section,
+body > section > section {
+  margin-top: var(--ds-gap-4);
+  padding: var(--ds-gap-4);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-2);
+}
+
+body > header nav ul,
+body > footer nav ul {
+  display: flex;
+  gap: var(--ds-gap-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+body > header nav a,
+body > footer nav a {
+  color: var(--ds-ink);
 }
 
 /* Shell layout */
@@ -371,5 +470,18 @@ button:focus-visible,
 
   .ds-page-header {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  body > header,
+  body > footer {
+    padding: var(--ds-gap-3);
+  }
+
+  body > main,
+  body > section {
+    margin: var(--ds-gap-3) var(--ds-gap-3);
+    padding: var(--ds-gap-4);
   }
 }
