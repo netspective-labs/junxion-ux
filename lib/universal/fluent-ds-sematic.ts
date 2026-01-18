@@ -662,6 +662,7 @@ export interface LayoutInit<DS extends AnyDesignSystem = DefaultDesignSystem> {
   variant?: LayoutVariant;
   lang?: string;
   title?: string;
+  stylesheetHref?: string;
 
   theme?: (t: ThemeApi) => ThemeParts | void;
   head?: (h: HeadApi) => DsHtml | void;
@@ -707,6 +708,7 @@ export function semanticLayout<
   const metaViewport = init.meta?.viewport ??
     "width=device-width, initial-scale=1";
   const metaColorScheme = init.meta?.colorScheme ?? "light dark";
+  const stylesheetHref = init.stylesheetHref ?? "/fluent-ds/semantic.css";
 
   const parts = init.shell({
     header: ds.header,
@@ -730,6 +732,7 @@ export function semanticLayout<
         meta({ charset: metaCharset }),
         meta({ name: "viewport", content: metaViewport }),
         meta({ name: "color-scheme", content: metaColorScheme }),
+        link({ rel: "stylesheet", href: stylesheetHref }),
         init.title ? title(init.title) : "",
         themeParts.head ?? "",
         extraHead,

@@ -326,6 +326,7 @@ Deno.test("semanticLayout(): app-shell", () => {
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <meta content="light dark" name="color-scheme">
+    <link href="/fluent-ds/semantic.css" rel="stylesheet">
     <title>App Shell</title>
   </head>
   <body class="ds-body">
@@ -391,6 +392,7 @@ Deno.test("semanticLayout(): centered layout", () => {
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <meta content="light dark" name="color-scheme">
+    <link href="/fluent-ds/semantic.css" rel="stylesheet">
     <title>Centered</title>
   </head>
   <body class="ds-body">
@@ -450,6 +452,7 @@ Deno.test("semanticLayout(): marketing layout", () => {
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <meta content="light dark" name="color-scheme">
+    <link href="/fluent-ds/semantic.css" rel="stylesheet">
     <title>Marketing</title>
   </head>
   <body class="ds-body">
@@ -608,6 +611,7 @@ Deno.test("custom variants: type safety and extended rendering", () => {
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <meta content="light dark" name="color-scheme">
+    <link href="/fluent-ds/semantic.css" rel="stylesheet">
     <title>Custom Marketing</title>
   </head>
   <body class="ds-body">
