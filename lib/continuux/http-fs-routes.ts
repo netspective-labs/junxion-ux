@@ -21,7 +21,7 @@
 // - Exposes `buildFsRouteManifest` for introspection / docs.
 // - Exposes `tsBundleTransform` for “bundle *.ts to JS” using InMemoryBundler.
 
-import { walk } from "@std/fs/walk";
+import { walk } from "@std/fs";
 import { contentType } from "@std/media-types";
 import * as path from "@std/path";
 import { parse as parsePosix } from "@std/path";
