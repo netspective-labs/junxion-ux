@@ -184,7 +184,8 @@ body > footer nav a {
 
 .ds-workspace {
   display: grid;
-  grid-template-columns: var(--ds-sidebar-width) minmax(0, 1fr)
+  grid-template-columns:
+    var(--ds-sidebar-width) minmax(0, 1fr)
     var(--ds-rail-width);
   gap: var(--ds-gap-4);
   padding: var(--ds-gap-5);
@@ -417,8 +418,11 @@ body > footer nav a {
 }
 
 .ds-marketing .ds-header-inner {
-  background:
-    linear-gradient(120deg, rgba(14, 165, 164, 0.12), rgba(56, 189, 248, 0.18));
+  background: linear-gradient(
+    120deg,
+    rgba(14, 165, 164, 0.12),
+    rgba(56, 189, 248, 0.18)
+  );
   border-radius: 0 0 24px 24px;
 }
 
