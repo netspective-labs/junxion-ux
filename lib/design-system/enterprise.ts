@@ -19,26 +19,25 @@ import {
   body,
   button,
   classNames,
+  details,
   div,
   doctype,
   footer,
   head,
   header,
   html,
-  label,
   li,
   link,
   main,
   meta,
   nav,
   ol,
-  option,
   p,
   render,
   renderPretty,
   section,
-  select,
   span,
+  summary,
   title,
   trustedRaw,
   ul,
@@ -407,8 +406,16 @@ export function createEnterpriseDesignSystem<
           class: c("eds-menu-toggle", init?.class),
           type: "button",
           "aria-label": labelText,
+          "aria-expanded": "true",
+          "data-eds-toggle": "sidebar",
         },
-        span({ class: "eds-menu-toggle-icon" }, "Menu"),
+        span(
+          { class: "eds-menu-toggle-icon" },
+          span({ class: "eds-menu-toggle-bar" }),
+          span({ class: "eds-menu-toggle-bar" }),
+          span({ class: "eds-menu-toggle-bar" }),
+        ),
+        span({ class: "eds-sr-only" }, labelText),
       ),
     brand: (info, init) => {
       const nodes: DsChild[] = [];
@@ -469,21 +476,44 @@ export function createEnterpriseDesignSystem<
     subjectSelector: (subjects, init) =>
       section(
         { class: c("eds-sidebar-subject", init?.class) },
-        init?.label
-          ? label({ class: "eds-sidebar-subject-label" }, init.label)
-          : "",
-        select(
-          { class: "eds-sidebar-subject-select" },
-          subjects.map((subject) =>
-            option(
-              {
-                value: subject.id,
-                selected: subject.active ? true : undefined,
-              },
-              subject.label,
-            )
-          ),
-        ),
+        (() => {
+          const activeSubject = subjects.find((subject) => subject.active) ??
+            subjects[0];
+          return details(
+            { class: "eds-subject-menu" },
+            summary(
+              { class: "eds-subject-trigger" },
+              span({ class: "eds-subject-icon" }),
+              span(
+                { class: "eds-subject-label" },
+                activeSubject?.label ?? "",
+              ),
+              span({ class: "eds-subject-chevron" }),
+            ),
+            ul(
+              { class: "eds-subject-list" },
+              subjects.map((subject) =>
+                li(
+                  { class: "eds-subject-item" },
+                  button(
+                    {
+                      class: c(
+                        "eds-subject-option",
+                        subject.active && "is-active",
+                      ),
+                      type: "button",
+                      "data-subject": subject.id,
+                      "data-label": subject.label,
+                    },
+                    span({ class: "eds-subject-option-icon" }),
+                    span({ class: "eds-subject-option-label" }, subject.label),
+                    span({ class: "eds-subject-check" }),
+                  ),
+                )
+              ),
+            ),
+          );
+        })(),
       ),
     sectionTitle: (t, init) =>
       span({ class: c("eds-sidebar-title", init?.class) }, t),
@@ -659,7 +689,7 @@ export function createEnterpriseDesignSystem<
       section(
         { class: c("eds-sidebar-inner", o.collapsed && "is-collapsed") },
         o.subjects?.length
-          ? api.subjectSelector(o.subjects, { label: "Subject" })
+          ? api.subjectSelector(o.subjects)
           : "",
         o.title ? api.sectionTitle(o.title) : "",
         o.sections.map((sectionDef) => api.navSection(sectionDef)),

@@ -30,6 +30,7 @@ import {
   label,
   li,
   option,
+  scriptJs,
   select,
   table,
   tbody,
@@ -48,10 +49,11 @@ const app = Application.sharedState<State, Vars>({});
 const ds = defaultEnterpriseDesignSystem;
 
 const headerNav = [
-  { label: "Home", href: "/", active: true },
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Users", href: "/users" },
-  { label: "Settings", href: "/settings" },
+  { label: "Home", href: "/" },
+  { label: "Dashboard", href: "/dashboard", active: true },
+  { label: "Data Table", href: "/users" },
+  { label: "Forms", href: "/form" },
+  { label: "Components", href: "/details" },
 ];
 
 const sidebarSubjects = [
@@ -67,24 +69,23 @@ const sidebarSections = [
     label: "Overview",
     items: [
       { label: "Dashboard", href: "/dashboard", active: true },
-      { label: "Workflows", href: "/workflows" },
+      { label: "Activity Feed", href: "/activity" },
     ],
   },
   {
-    id: "operations",
-    label: "Operations",
+    id: "user-management",
+    label: "User Management",
     items: [
-      { label: "Requests", href: "/requests" },
-      { label: "Approvals", href: "/approvals" },
-      { label: "Audit Log", href: "/audit" },
+      { label: "Users", href: "/users" },
+      { label: "Teams", href: "/teams" },
     ],
   },
   {
-    id: "settings",
-    label: "Settings",
+    id: "system",
+    label: "System",
     items: [
-      { label: "Preferences", href: "/settings" },
-      { label: "Integrations", href: "/integrations" },
+      { label: "Audit Logs", href: "/audit" },
+      { label: "Security", href: "/security" },
     ],
   },
 ];
@@ -111,13 +112,44 @@ function pageLayout(args: {
   return enterpriseLayout(
     {
       title: `${args.title} | Enterprise DS Demo`,
+      head: () =>
+        scriptJs(
+          `
+document.addEventListener("DOMContentLoaded", () => {
+  const shell = document.querySelector(".eds-shell");
+  const toggle = document.querySelector("[data-eds-toggle='sidebar']");
+  if (toggle && shell) {
+    toggle.addEventListener("click", () => {
+      const isCollapsed = shell.classList.toggle("is-collapsed");
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+    });
+  }
+
+  document.querySelectorAll(".eds-subject-menu").forEach((menu) => {
+    const label = menu.querySelector(".eds-subject-label");
+    const options = menu.querySelectorAll(".eds-subject-option");
+    options.forEach((option) => {
+      option.addEventListener("click", () => {
+        options.forEach((btn) => btn.classList.remove("is-active"));
+        option.classList.add("is-active");
+        if (label) {
+          const nextLabel = option.getAttribute("data-label") || "";
+          label.textContent = nextLabel;
+        }
+        menu.removeAttribute("open");
+      });
+    });
+  });
+});
+          `.trim(),
+        ),
       shell: ({ header, sidebar, content, rightRail, footer }) => ({
         header: header.use("enterprise", {
           brand: {
-            appName: "Junxion",
+            appName: "Enterprise",
             href: "/",
             environment: "dev",
-            logo: "J",
+            logo: "E",
           },
           nav: headerNav.map((item) => ({
             ...item,
@@ -132,9 +164,11 @@ function pageLayout(args: {
                 type: "search",
                 placeholder: "Search...",
               }),
+              span({ class: "eds-search-shortcut" }, "⌘K"),
             ),
-            a({ href: "/notifications" }, "Notifications"),
-            a({ href: "/profile", class: "eds-action-primary" }, "Profile"),
+            a({ href: "/notifications", class: "eds-icon-button" }, "🔔"),
+            a({ href: "/settings", class: "eds-icon-button" }, "⚙"),
+            a({ href: "/profile" }, "John Doe"),
           ],
           breadcrumbs: [
             { label: "Home", href: "/" },
@@ -142,7 +176,6 @@ function pageLayout(args: {
           ],
         }),
         sidebar: sidebar.use("enterprise", {
-          title: "Navigation",
           subjects: sidebarSubjects,
           sections: sidebarSections.map((section) => ({
             ...section,
@@ -157,8 +190,8 @@ function pageLayout(args: {
           pageTitle: args.title,
           description: args.description ? p(args.description) : undefined,
           actions: args.actions ? [args.actions] : [
-            a({ href: "/create", class: "eds-action-primary" }, "Create"),
-            a({ href: "/help" }, "Help"),
+            a({ href: "/reports" }, "Download Report"),
+            a({ href: "/export", class: "eds-action-primary" }, "Export"),
           ],
           body: args.body,
         }),
@@ -167,14 +200,30 @@ function pageLayout(args: {
           items: [
             {
               id: "overview",
-              label: "Overview",
+              label: "Key Metrics",
               href: "#overview",
               active: true,
             },
-            { id: "details", label: "Details", href: "#details" },
-            { id: "activity", label: "Activity", href: "#activity" },
+            { id: "details", label: "Charts", href: "#details" },
+            { id: "activity", label: "Recent Activity", href: "#activity" },
+            { id: "tasks", label: "Tasks", href: "#tasks" },
           ],
-          body: p("Right rail content can include quick actions or status."),
+          body: section(
+            { class: "eds-rail-panel" },
+            section(
+              { class: "eds-rail-panel-header" },
+              span({}, "Quick Actions"),
+            ),
+            section(
+              { class: "eds-rail-panel-body eds-quick-actions" },
+              a({ href: "/report", class: "eds-quick-action" }, "Create Report"),
+              a(
+                { href: "/meeting", class: "eds-quick-action" },
+                "Schedule Meeting",
+              ),
+              a({ href: "/export", class: "eds-quick-action" }, "Export Data"),
+            ),
+          ),
         }),
         footer: footer.use("enterprise", {
           links: footerLinks,
@@ -191,60 +240,136 @@ function pageLayout(args: {
 const dashboardBody = section(
   { id: "overview" },
   div(
-    {
-      style:
-        "display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));",
-    },
-    ...["Active Users", "Revenue", "Incidents", "SLA"].map((label, index) =>
-      section(
-        { class: "eds-section" },
-        h3({}, label),
-        p(`Metric ${index + 1}`),
-        span({ style: "font-size: 1.4rem; font-weight: 700;" }, "128"),
-      )
+    { class: "eds-card-grid" },
+    section(
+      { class: "eds-section eds-metric-card" },
+      span({ class: "eds-metric-icon" }, "$"),
+      span({ class: "eds-metric-label" }, "Total Revenue"),
+      span({ class: "eds-metric-value" }, "$45,231.89"),
+      span({ class: "eds-metric-delta" }, "▲ 20.1% from last month"),
+    ),
+    section(
+      { class: "eds-section eds-metric-card" },
+      span({ class: "eds-metric-icon" }, "👥"),
+      span({ class: "eds-metric-label" }, "Active Users"),
+      span({ class: "eds-metric-value" }, "2,350"),
+      span({ class: "eds-metric-delta" }, "▲ 180.1% from last month"),
+    ),
+    section(
+      { class: "eds-section eds-metric-card" },
+      span({ class: "eds-metric-icon" }, "🛒"),
+      span({ class: "eds-metric-label" }, "Orders"),
+      span({ class: "eds-metric-value" }, "+12,234"),
+      span({ class: "eds-metric-delta" }, "▲ 19% from last month"),
+    ),
+    section(
+      { class: "eds-section eds-metric-card" },
+      span({ class: "eds-metric-icon" }, "⚡"),
+      span({ class: "eds-metric-label" }, "Active Now"),
+      span({ class: "eds-metric-value" }, "+573"),
+      span(
+        { class: "eds-metric-delta is-negative" },
+        "▼ 2.5% since last hour",
+      ),
     ),
   ),
   div(
-    {
-      id: "details",
-      style: "display:grid; gap:16px; grid-template-columns: 2fr 1fr;",
-    },
+    { id: "details", class: "eds-chart-grid" },
     section(
       { class: "eds-section" },
-      h3({}, "Usage Trend"),
-      p("Chart placeholder for main usage trend."),
-      div(
-        {
-          style:
-            "height:180px; border-radius:10px; background: #eef2f7; display:flex; align-items:center; justify-content:center;",
-        },
-        "Chart Area",
-      ),
+      h3({}, "Revenue Overview"),
+      p("Monthly revenue trend for the current year."),
+      div({ class: "eds-chart-placeholder" }, "Chart Area"),
     ),
     section(
       { class: "eds-section" },
-      h3({}, "Pipeline"),
-      p("Secondary chart or KPI list."),
-      ul(
-        {},
-        [
-          li({}, "Stage 1: 24 items"),
-          li({}, "Stage 2: 12 items"),
-          li({}, "Stage 3: 7 items"),
-        ],
+      h3({}, "Orders by Month"),
+      p("Order volume distribution."),
+      div(
+        { class: "eds-bar-chart" },
+        ...[86, 62, 40, 58, 46, 52, 74].map((height) =>
+          div({ class: "eds-bar", style: `height:${height}%;` })
+        ),
       ),
     ),
   ),
   section(
     { id: "activity", class: "eds-section" },
-    h3({}, "Recent Activity"),
-    ul(
+    div(
+      { style: "display:flex; justify-content:space-between; gap:12px;" },
+      h3({}, "Recent Activity"),
+      a({ href: "/activity" }, "View all"),
+    ),
+    div(
       {},
-      [
-        li({}, "Alex approved change request CR-128."),
-        li({}, "Sam updated the onboarding workflow."),
-        li({}, "Jules created a new dashboard filter."),
-      ],
+      div(
+        { class: "eds-activity-item" },
+        span({}, "Sarah Chen created a new order #ORD-7892"),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "2 min ago"),
+      ),
+      div(
+        { class: "eds-activity-item" },
+        span({}, "Mike Johnson updated permissions Admin Role"),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "15 min ago"),
+      ),
+      div(
+        { class: "eds-activity-item" },
+        span({}, "Emily Davis deployed changes to Production"),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "1 hour ago"),
+      ),
+    ),
+  ),
+  section(
+    { id: "tasks", class: "eds-section" },
+    h3({}, "Project Progress"),
+    p("Current sprint task completion."),
+    div(
+      { style: "display:grid; gap:12px;" },
+      div(
+        { style: "display:flex; align-items:center; gap:12px;" },
+        span({ style: "min-width:120px; font-weight:600;" }, "Design System"),
+        div(
+          {
+            style:
+              "flex:1; height:8px; background:#eef2f7; border-radius:999px; overflow:hidden;",
+          },
+          div({
+            style:
+              "height:100%; width:85%; background:#5b61f6; border-radius:999px;",
+          }),
+        ),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "85%"),
+      ),
+      div(
+        { style: "display:flex; align-items:center; gap:12px;" },
+        span({ style: "min-width:120px; font-weight:600;" }, "API Integration"),
+        div(
+          {
+            style:
+              "flex:1; height:8px; background:#eef2f7; border-radius:999px; overflow:hidden;",
+          },
+          div({
+            style:
+              "height:100%; width:62%; background:#f59e0b; border-radius:999px;",
+          }),
+        ),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "62%"),
+      ),
+      div(
+        { style: "display:flex; align-items:center; gap:12px;" },
+        span({ style: "min-width:120px; font-weight:600;" }, "User Testing"),
+        div(
+          {
+            style:
+              "flex:1; height:8px; background:#eef2f7; border-radius:999px; overflow:hidden;",
+          },
+          div({
+            style:
+              "height:100%; width:45%; background:#22c55e; border-radius:999px;",
+          }),
+        ),
+        span({ style: "color:#8a95a5; font-size:0.85rem;" }, "45%"),
+      ),
     ),
   ),
 );
@@ -492,7 +617,7 @@ function htmlFor(pathname: string) {
       return render(
         pageLayout({
           title: "Dashboard",
-          description: "Overview of key operational metrics.",
+          description: "Welcome back, John. Here's what's happening today.",
           body: dashboardBody,
           pathname,
         }).html,
