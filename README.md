@@ -30,7 +30,9 @@ Get a flavor for the code in the initial developer experience (DX) entry points:
 ```bash
 $ ./support/dx/hello/counter.ts      # interactive counter (SSR + SSE) increment app
 $ ./support/dx/hello/counter-ce.ts   # interactive counter (SSR + Web Component + SSE) increment app
-$ ./support/dx/hello/markdown.ts     # client-side markdown preview app
+$ ./support/dx/hello/markdown.ts     # client-side markdown preview app with custom HTML
+$ ./support/dx/hello/markdown-ds.ts  # client-side markdown preview app with semantic design system
+$ ./support/dx/enterprise-ds/demo.ts # demo of Enterprise Design System
 ```
 
 ## Modules
