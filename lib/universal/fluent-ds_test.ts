@@ -34,7 +34,7 @@ Deno.test("fluent-ds: semantic body-only layout", () => {
     },
   ];
 
-  const BodyOnly = defineLayout({
+  const bodyOnly = defineLayout({
     name: "BodyOnly",
     slots: slots({ required: ["content"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, _api, s) =>
@@ -50,7 +50,7 @@ Deno.test("fluent-ds: semantic body-only layout", () => {
   const ds = createDesignSystem<RenderInput>("body-only", naming)
     .policies({ wrappers: { enabled: false } })
     .uaDependencies(uaDeps)
-    .layout(BodyOnly)
+    .layout(bodyOnly)
     .build();
 
   const page = h.renderPretty(
@@ -90,7 +90,7 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
     },
   ];
 
-  const Header = defineRegion({
+  const header = defineRegion({
     name: "Header",
     slots: slots({ required: ["title"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -103,7 +103,7 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
       ),
   });
 
-  const Main = defineRegion({
+  const main = defineRegion({
     name: "Main",
     slots: slots({ required: ["content"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -116,7 +116,7 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
       ),
   });
 
-  const Footer = defineRegion({
+  const footer = defineRegion({
     name: "Footer",
     slots: slots({ required: ["content"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -129,7 +129,7 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
       ),
   });
 
-  const PageLayout = defineLayout({
+  const pageLayout = defineLayout({
     name: "PageLayout",
     slots: slots({
       required: ["title", "content", "footer"] as const,
@@ -146,10 +146,10 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
   const ds = createDesignSystem<RenderInput>("header-main-footer", naming)
     .policies({ wrappers: { enabled: false } })
     .uaDependencies(uaDeps)
-    .region(Header)
-    .region(Main)
-    .region(Footer)
-    .layout(PageLayout)
+    .region(header)
+    .region(main)
+    .region(footer)
+    .layout(pageLayout)
     .build();
 
   const page = h.renderPretty(
@@ -199,7 +199,7 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
     },
   ];
 
-  const Header = defineRegion({
+  const header = defineRegion({
     name: "Header",
     slots: slots({ required: ["breadcrumbs"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -212,7 +212,7 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
       ),
   });
 
-  const Main = defineRegion({
+  const main = defineRegion({
     name: "Main",
     slots: slots({ required: ["content", "aside"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -226,7 +226,7 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
       ),
   });
 
-  const Footer = defineRegion({
+  const footer = defineRegion({
     name: "Footer",
     slots: slots({ required: ["content"] as const }),
     render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) =>
@@ -239,7 +239,7 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
       ),
   });
 
-  const FullLayout = defineLayout({
+  const fullLayout = defineLayout({
     name: "FullLayout",
     slots: slots({
       required: ["breadcrumbs", "content", "aside", "footer"] as const,
@@ -256,10 +256,10 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
   const ds = createDesignSystem<RenderInput>("full-layout", naming)
     .policies({ wrappers: { enabled: false } })
     .uaDependencies(uaDeps)
-    .region(Header)
-    .region(Main)
-    .region(Footer)
-    .layout(FullLayout)
+    .region(header)
+    .region(main)
+    .region(footer)
+    .layout(fullLayout)
     .build();
 
   const page = h.renderPretty(
