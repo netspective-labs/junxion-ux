@@ -691,8 +691,10 @@ export function normalizeUaRoute(dep: UaDependency): UaRoute {
   return { ...dep, normalizedAs: as };
 }
 
-export function uaHeadTags(deps: readonly UaDependency[]): RawHtml {
-  const routes = deps.map(normalizeUaRoute);
+export function browserUserAgentHeadTags(
+  deps: Iterable<UaDependency>,
+): RawHtml {
+  const routes = Array.from(deps).map(normalizeUaRoute);
 
   return children((e) => {
     for (const r of routes) {

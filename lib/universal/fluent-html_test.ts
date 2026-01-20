@@ -319,3 +319,83 @@ Deno.test("fluent-html: helpers + security + voids", async (t) => {
     );
   });
 });
+
+Deno.test("browser user agent (UA) dependencies: normalize + head tags", async (t) => {
+  await t.step("normalizeUaRoute: infers and preserves `as`", () => {
+    const css = F.normalizeUaRoute({
+      mountPoint: "/base.css",
+      canonicalSource: "https://cdn/base.css",
+      mimeType: "text/css",
+    });
+    assertEquals(css.normalizedAs, "style");
+
+    const js = F.normalizeUaRoute({
+      mountPoint: "/app.js",
+      canonicalSource: "https://cdn/app.js",
+      mimeType: "application/javascript",
+    });
+    assertEquals(js.normalizedAs, "module");
+
+    const other = F.normalizeUaRoute({
+      mountPoint: "/misc.bin",
+      canonicalSource: "https://cdn/misc.bin",
+      mimeType: "application/octet-stream",
+    });
+    assertEquals(other.normalizedAs, "other");
+
+    const explicit = F.normalizeUaRoute({
+      mountPoint: "/legacy.js",
+      canonicalSource: "https://cdn/legacy.js",
+      mimeType: "text/javascript",
+      as: "script",
+    });
+    assertEquals(explicit.normalizedAs, "script");
+  });
+
+  await t.step("uaHeadTags: emits head markup for known types", () => {
+    const deps: F.UaDependency[] = [
+      {
+        mountPoint: "/base.css",
+        canonicalSource: "https://cdn/base.css",
+        mimeType: "text/css",
+        integrity: "sha-css",
+        crossOrigin: "anonymous",
+      },
+      {
+        mountPoint: "/legacy.js",
+        canonicalSource: "https://cdn/legacy.js",
+        mimeType: "text/javascript",
+        as: "script",
+        integrity: "sha-legacy",
+      },
+      {
+        mountPoint: "/app.js",
+        canonicalSource: "https://cdn/app.js",
+        mimeType: "application/javascript",
+      },
+      {
+        mountPoint: "/preload.js",
+        canonicalSource: "https://cdn/preload.js",
+        mimeType: "application/javascript",
+        as: "preload",
+        crossOrigin: "use-credentials",
+      },
+      {
+        mountPoint: "/misc.bin",
+        canonicalSource: "https://cdn/misc.bin",
+        mimeType: "application/octet-stream",
+      },
+    ];
+
+    const html = F.renderPretty(F.head(F.browserUserAgentHeadTags(deps)));
+    assertEquals(
+      html.trim(),
+      `<head>
+  <link crossorigin="anonymous" href="/base.css" integrity="sha-css" rel="stylesheet">
+  <script integrity="sha-legacy" src="/legacy.js"></script>
+  <script src="/app.js" type="module"></script>
+  <link as="script" crossorigin="use-credentials" href="/preload.js" rel="preload"><!--ua dep: /misc.bin-->
+</head>`,
+    );
+  });
+});

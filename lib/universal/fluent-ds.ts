@@ -185,9 +185,9 @@
 import * as h from "./fluent-html.ts";
 import type { RawHtml } from "./fluent-html.ts";
 import {
+  browserUserAgentHeadTags,
   normalizeUaRoute,
   UaDependency,
-  uaHeadTags,
   UaRoute,
 } from "./fluent-html.ts";
 
@@ -629,7 +629,7 @@ export function createDesignSystem<
 
         uaDependencies: uaDepsFn,
         uaRoutes: () => uaDepsFn().map(normalizeUaRoute),
-        uaHeadTags: () => uaHeadTags(uaDepsFn()),
+        uaHeadTags: () => browserUserAgentHeadTags(uaDepsFn()),
 
         render: (layoutName, renderCtx, options) =>
           renderInternal(
@@ -806,7 +806,7 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
   const def = layouts[layoutName];
   if (!def) throw new Error(`fluent-ds: unknown layout "${layoutName}"`);
 
-  const uaHead = uaHeadTags(uaDepsFn());
+  const uaHead = browserUserAgentHeadTags(uaDepsFn());
   const headChildren: RawHtml[] = [uaHead];
 
   if (def.headSlots) {
