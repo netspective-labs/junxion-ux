@@ -21,6 +21,19 @@ const naming: NamingStrategy = {
 };
 
 Deno.test("fluent-ds: semantic body-only layout", () => {
+  const uaDeps: h.UaDependency[] = [
+    {
+      mountPoint: "/_ua/body-only.css",
+      canonicalSource: "https://example.test/body-only.css",
+      mimeType: "text/css",
+    },
+    {
+      mountPoint: "/_ua/body-only.js",
+      canonicalSource: "https://example.test/body-only.js",
+      mimeType: "application/javascript",
+    },
+  ];
+
   const BodyOnly = defineLayout({
     name: "BodyOnly",
     slots: slots({ required: ["content"] as const }),
@@ -36,6 +49,7 @@ Deno.test("fluent-ds: semantic body-only layout", () => {
 
   const ds = createDesignSystem<RenderInput>("body-only", naming)
     .policies({ wrappers: { enabled: false } })
+    .uaDependencies(uaDeps)
     .layout(BodyOnly)
     .build();
 
@@ -49,7 +63,10 @@ Deno.test("fluent-ds: semantic body-only layout", () => {
     page.trim(),
     `<!doctype html>
 <html>
-  <head></head>
+  <head>
+    <link href="/_ua/body-only.css" rel="stylesheet">
+    <script src="/_ua/body-only.js" type="module"></script>
+  </head>
   <body>
     <main class="layout-body" id="layout-body">
       <p>Hello</p>
@@ -60,6 +77,19 @@ Deno.test("fluent-ds: semantic body-only layout", () => {
 });
 
 Deno.test("fluent-ds: semantic header/main/footer layout", () => {
+  const uaDeps: h.UaDependency[] = [
+    {
+      mountPoint: "/_ua/header-main-footer.css",
+      canonicalSource: "https://example.test/header-main-footer.css",
+      mimeType: "text/css",
+    },
+    {
+      mountPoint: "/_ua/header-main-footer.js",
+      canonicalSource: "https://example.test/header-main-footer.js",
+      mimeType: "application/javascript",
+    },
+  ];
+
   const Header = defineRegion({
     name: "Header",
     slots: slots({ required: ["title"] as const }),
@@ -115,6 +145,7 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
 
   const ds = createDesignSystem<RenderInput>("header-main-footer", naming)
     .policies({ wrappers: { enabled: false } })
+    .uaDependencies(uaDeps)
     .region(Header)
     .region(Main)
     .region(Footer)
@@ -135,7 +166,10 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
     page.trim(),
     `<!doctype html>
 <html>
-  <head></head>
+  <head>
+    <link href="/_ua/header-main-footer.css" rel="stylesheet">
+    <script src="/_ua/header-main-footer.js" type="module"></script>
+  </head>
   <body>
     <section class="layout-page">
       <header class="region-site-header" id="region-site-header">
@@ -152,6 +186,19 @@ Deno.test("fluent-ds: semantic header/main/footer layout", () => {
 });
 
 Deno.test("fluent-ds: full semantic layout with components", () => {
+  const uaDeps: h.UaDependency[] = [
+    {
+      mountPoint: "/_ua/full-layout.css",
+      canonicalSource: "https://example.test/full-layout.css",
+      mimeType: "text/css",
+    },
+    {
+      mountPoint: "/_ua/full-layout.js",
+      canonicalSource: "https://example.test/full-layout.js",
+      mimeType: "application/javascript",
+    },
+  ];
+
   const Header = defineRegion({
     name: "Header",
     slots: slots({ required: ["breadcrumbs"] as const }),
@@ -208,6 +255,7 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
 
   const ds = createDesignSystem<RenderInput>("full-layout", naming)
     .policies({ wrappers: { enabled: false } })
+    .uaDependencies(uaDeps)
     .region(Header)
     .region(Main)
     .region(Footer)
@@ -247,7 +295,10 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
     page.trim(),
     `<!doctype html>
 <html>
-  <head></head>
+  <head>
+    <link href="/_ua/full-layout.css" rel="stylesheet">
+    <script src="/_ua/full-layout.js" type="module"></script>
+  </head>
   <body>
     <section class="layout-app-shell">
       <header class="region-app-header" id="region-app-header">
