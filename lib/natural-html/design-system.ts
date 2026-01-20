@@ -247,6 +247,7 @@ type RenderCtxBase<N extends NamingStrategy = NamingStrategy> = {
   readonly attrs: typeof h.attrs;
   readonly cls: (...parts: h.ClassSpec[]) => string;
   readonly css: typeof h.styleText;
+  readonly componentStyles: ComponentStyleRegistry;
   readonly trace: TraceSink;
   readonly policy: DsPolicies;
 };
@@ -433,10 +434,31 @@ export type Component<
   Props = unknown,
   Ctx extends object = EmptyObject,
   NS extends NamingStrategy = NamingStrategy,
-> = (
-  ctx: RenderCtx<Ctx, NS>,
-  props: Props,
-) => RawHtml;
+> =
+  & ((
+    ctx: RenderCtx<Ctx, NS>,
+    props: Props,
+  ) => RawHtml)
+  & { readonly stylesheets?: ComponentStylesheets };
+
+export type CssStyleObject = Readonly<
+  Record<string, string | number | null | undefined | false>
+>;
+
+export type ComponentStylesheet<Classes extends string = string> = Readonly<
+  Record<Classes, CssStyleObject>
+>;
+
+export type ComponentStylesheets<Classes extends string = string> =
+  readonly ComponentStylesheet<Classes>[];
+
+type ComponentStyleRegistry = {
+  readonly register: (
+    componentName: string,
+    stylesheets: ComponentStylesheets,
+  ) => void;
+  readonly cssText: () => string;
+};
 
 export function defineComponent<
   Props,
@@ -444,22 +466,60 @@ export function defineComponent<
   NS extends NamingStrategy = NamingStrategy,
 >(
   name: string,
+  stylesheets: ComponentStylesheets,
   fn: Component<Props, Ctx, NS>,
+): Component<Props, Ctx, NS>;
+export function defineComponent<
+  Props,
+  Ctx extends object = EmptyObject,
+  NS extends NamingStrategy = NamingStrategy,
+>(
+  name: string,
+  fn: Component<Props, Ctx, NS>,
+): Component<Props, Ctx, NS>;
+export function defineComponent<
+  Props,
+  Ctx extends object = EmptyObject,
+  NS extends NamingStrategy = NamingStrategy,
+>(
+  name: string,
+  stylesheetsOrFn: ComponentStylesheets | Component<Props, Ctx, NS>,
+  maybeFn?: Component<Props, Ctx, NS>,
 ): Component<Props, Ctx, NS> {
-  return (ctx, props) => {
-    const componentCtx: RenderCtx<Ctx, NS> = {
-      ...ctx,
-      component: name,
-      cls: makeClassNames(ctx.naming, "component"),
-    };
-    ctx.trace({
-      kind: "component",
-      elementId: ctx.naming.elemIdValue(name, "component"),
-      className: ctx.naming.className(name, "component"),
-      name,
-    });
-    return fn(componentCtx, props);
+  const makeComponent = (
+    stylesheets: ComponentStylesheets,
+    fn: Component<Props, Ctx, NS>,
+  ): Component<Props, Ctx, NS> => {
+    const definedStylesheets = stylesheets.length > 0 ? stylesheets : undefined;
+    const component = Object.assign(
+      (ctx: RenderCtx<Ctx, NS>, props: Props) => {
+        const componentCtx: RenderCtx<Ctx, NS> = {
+          ...ctx,
+          component: name,
+          cls: makeClassNames(ctx.naming, "component"),
+        };
+        if (definedStylesheets) {
+          componentCtx.componentStyles.register(name, definedStylesheets);
+        }
+        ctx.trace({
+          kind: "component",
+          elementId: ctx.naming.elemIdValue(name, "component"),
+          className: ctx.naming.className(name, "component"),
+          name,
+        });
+        return fn(componentCtx, props);
+      },
+      definedStylesheets ? { stylesheets: definedStylesheets } : {},
+    ) as Component<Props, Ctx, NS>;
+    return component;
   };
+
+  if (typeof stylesheetsOrFn === "function") {
+    return makeComponent([], stylesheetsOrFn);
+  }
+  const fn = maybeFn;
+  if (!fn) throw new Error("fluent-ds: defineComponent missing renderer");
+  return makeComponent(stylesheetsOrFn, fn);
 }
 
 /* -----------------------------------------------------------------------------
@@ -747,6 +807,7 @@ function renderInternal<Ctx extends object, NS extends NamingStrategy>(
     attrs: h.attrs,
     cls: makeClassNames(naming, "layout"),
     css: h.styleText,
+    componentStyles: createComponentStyleRegistry(naming),
     trace,
     policy,
   };
@@ -779,7 +840,11 @@ function renderInternal<Ctx extends object, NS extends NamingStrategy>(
     layoutSlots,
   );
 
-  return applyCssStyleEmitStrategy(raw, cssStyleEmitStrategy);
+  return applyCssStyleEmitStrategy(
+    raw,
+    cssStyleEmitStrategy,
+    ctxBase.componentStyles.cssText(),
+  );
 }
 
 function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
@@ -811,6 +876,7 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
     attrs: h.attrs,
     cls: makeClassNames(naming, "layout"),
     css: h.styleText,
+    componentStyles: createComponentStyleRegistry(naming),
     trace,
     policy,
   };
@@ -868,6 +934,7 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
     bodyRaw,
     cssStyleEmitStrategy,
     ["body"],
+    ctxBase.componentStyles.cssText(),
   );
   if (cssText && cssStyleEmitStrategy === "class-style-head") {
     headChildren.unshift(h.style(cssText));
@@ -926,6 +993,7 @@ function extractInlineStylesForClassStrategy(
   raw: RawHtml,
   cssStyleEmitStrategy?: CssStyleEmitStrategy,
   basePath: string[] = [],
+  componentStylesCssText = "",
 ): InlineStyleExtraction {
   if (
     (cssStyleEmitStrategy !== "class-dep" &&
@@ -979,18 +1047,23 @@ function extractInlineStylesForClassStrategy(
 
   for (const node of raw.__nodes) visit(node as RootContent, basePath);
 
-  if (rules.length === 0) return { html: raw, cssText: "" };
+  const cssTextParts = [
+    componentStylesCssText.trim(),
+    rules.join("\n"),
+  ].filter((text) => text !== "");
+  if (cssTextParts.length === 0) return { html: raw, cssText: "" };
 
   const normalized = h.render(raw);
   return {
     html: { __rawHtml: normalized, __nodes: raw.__nodes },
-    cssText: rules.join("\n"),
+    cssText: cssTextParts.join("\n"),
   };
 }
 
 function applyCssStyleEmitStrategy(
   raw: RawHtml,
   cssStyleEmitStrategy?: CssStyleEmitStrategy,
+  componentStylesCssText = "",
 ): RawHtml {
   const effective = cssStyleEmitStrategy === "class-dep"
     ? "class-style-head"
@@ -998,9 +1071,40 @@ function applyCssStyleEmitStrategy(
   const { html, cssText } = extractInlineStylesForClassStrategy(
     raw,
     effective,
+    [],
+    componentStylesCssText,
   );
   if (!cssText) return html;
   return combineHast(h.style(cssText), html);
+}
+
+function createComponentStyleRegistry(
+  naming: NamingStrategy,
+): ComponentStyleRegistry {
+  const stylesByComponent = new Map<string, ComponentStylesheets>();
+  return {
+    register: (componentName, stylesheets) => {
+      if (stylesheets.length === 0) return;
+      if (!stylesByComponent.has(componentName)) {
+        stylesByComponent.set(componentName, stylesheets);
+      }
+    },
+    cssText: () => {
+      if (stylesByComponent.size === 0) return "";
+      const rules: string[] = [];
+      for (const stylesheets of stylesByComponent.values()) {
+        for (const stylesheet of stylesheets) {
+          for (const [classToken, style] of Object.entries(stylesheet)) {
+            const ruleBody = h.styleText(style);
+            if (!ruleBody) continue;
+            const selector = `.${naming.className(classToken, "component")}`;
+            rules.push(`${selector} { ${ruleBody} }`);
+          }
+        }
+      }
+      return rules.join("\n");
+    },
+  };
 }
 
 function invokeLayout<Ctx extends object, NS extends NamingStrategy>(

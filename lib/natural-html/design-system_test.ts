@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import {
   createDesignSystem,
+  defineComponent,
   defineLayout,
   defineRegion,
   NamingStrategy,
@@ -347,6 +348,20 @@ Deno.test("fluent-ds: full semantic layout with components", () => {
 });
 
 Deno.test("fluent-ds: css style emit strategies", async (t) => {
+  const badge = defineComponent<
+    { readonly label: string },
+    RenderInput,
+    NamingStrategy
+  >(
+    "Badge",
+    [
+      { badge: { backgroundColor: "#111", color: "#fff" } },
+      { "badge--soft": { opacity: 0.7 } },
+    ],
+    (ctx, props) =>
+      h.span({ class: ctx.cls("badge", "badge--soft") }, props.label),
+  );
+
   const demoLayout = defineLayout({
     name: "StyleDemo",
     slots: slots({ required: ["content"] as const }),
@@ -379,7 +394,9 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
   await t.step("inline", () => {
     const inline = h.renderPretty(
       ds.page("StyleDemo", {}, {
-        slots: { content: () => h.p("Hi") },
+        slots: {
+          content: (ctx) => h.p("Hi", " ", badge(ctx, { label: "New" })),
+        },
         cssStyleEmitStrategy: "inline",
       }),
     );
@@ -396,7 +413,7 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
       </header>
       <main id="main" style="color:red">
         <section class="card" style="border:1px solid #000">
-          <p>Hi</p>
+          <p>Hi <span class="component-badge component-badge--soft">New</span></p>
         </section>
       </main>
       <aside id="promo" style="background:#eee">Promo</aside>
@@ -408,6 +425,8 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
   });
 
   const cssText = [
+    ".component-badge { background-color:#111;color:#fff; }",
+    ".component-badge--soft { opacity:0.7; }",
     "body div, #app { font-family:serif; }",
     "body div header { padding:1rem; }",
     "body div header h1 { margin:0; }",
@@ -421,7 +440,9 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
   await t.step("class-style-head", () => {
     const classHead = h.renderPretty(
       ds.page("StyleDemo", {}, {
-        slots: { content: () => h.p("Hi") },
+        slots: {
+          content: (ctx) => h.p("Hi", " ", badge(ctx, { label: "New" })),
+        },
         cssStyleEmitStrategy: "class-style-head",
       }),
     );
@@ -440,7 +461,7 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
       </header>
       <main id="main">
         <section class="card">
-          <p>Hi</p>
+          <p>Hi <span class="component-badge component-badge--soft">New</span></p>
         </section>
       </main>
       <aside id="promo">Promo</aside>
@@ -454,7 +475,9 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
   await t.step("class-dep", () => {
     const classDep = h.renderPretty(
       ds.page("StyleDemo", {}, {
-        slots: { content: () => h.p("Hi") },
+        slots: {
+          content: (ctx) => h.p("Hi", " ", badge(ctx, { label: "New" })),
+        },
         cssStyleEmitStrategy: "class-dep",
       }),
     );
@@ -473,7 +496,7 @@ Deno.test("fluent-ds: css style emit strategies", async (t) => {
       </header>
       <main id="main">
         <section class="card">
-          <p>Hi</p>
+          <p>Hi <span class="component-badge component-badge--soft">New</span></p>
         </section>
       </main>
       <aside id="promo">Promo</aside>
