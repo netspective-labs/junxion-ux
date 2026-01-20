@@ -15,6 +15,8 @@ import {
   docNavTree,
   DocNavTrees,
   docSubjectSelect,
+  headSlots,
+  HeadSlotInput,
   headSlotSpec,
   selectDocNavTree,
 } from "./fluent-patterns.ts";
@@ -136,17 +138,13 @@ export const corpusHeaderRegion = defineRegion({
     optional: ["globalNav", "searchBox"] as const,
   }),
   render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) => {
-    const elementId = ctx.naming.elemIdValue("header", "region");
     return h.header(
-      h.attrs({ id: elementId }, { class: ctx.cls("header") }),
-      h.div(
-        { class: ctx.cls("header__row") },
-        h.div({ class: ctx.cls("header__title") }, s.title(ctx)),
-        s.globalNav
-          ? h.nav({ class: ctx.cls("header__global-nav") }, s.globalNav(ctx))
-          : null,
+      { class: "container" },
+      h.nav(
+        h.ul(h.li(h.strong(s.title(ctx)))),
+        s.globalNav ? s.globalNav(ctx) : null,
         s.searchBox
-          ? h.div({ class: ctx.cls("header__search") }, s.searchBox(ctx))
+          ? h.form({ role: "search" }, s.searchBox(ctx))
           : null,
       ),
     );
@@ -160,28 +158,27 @@ export const corpusMainRegion = defineRegion({
     optional: ["toc", "pageMeta"] as const,
   }),
   render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) => {
-    const elementId = ctx.naming.elemIdValue("main", "region");
     return h.main(
-      h.attrs({ id: elementId }, { class: ctx.cls("main") }),
+      { class: "container" },
       h.div(
-        { class: ctx.cls("main__grid") },
+        { class: "grid" },
         h.aside(
-          { class: ctx.cls("main__nav") },
-          h.div({ class: ctx.cls("main__subject") }, s.navSubject(ctx)),
-          h.div({ class: ctx.cls("main__tree") }, s.navTree(ctx)),
+          h.nav(
+            { "aria-label": "Documentation" },
+            s.navSubject(ctx),
+            s.navTree(ctx),
+          ),
         ),
-        h.section(
-          { class: ctx.cls("main__content") },
+        h.article(
           s.content(ctx),
-          s.pageMeta
-            ? h.div({ class: ctx.cls("main__meta") }, s.pageMeta(ctx))
-            : null,
+          s.pageMeta ? h.footer(s.pageMeta(ctx)) : null,
         ),
         s.toc
           ? h.aside(
-            { class: ctx.cls("main__toc") },
-            h.div({ class: ctx.cls("main__toc-title") }, "On this page"),
-            s.toc(ctx),
+            h.nav(
+              { "aria-label": "On this page" },
+              s.toc(ctx),
+            ),
           )
           : null,
       ),
@@ -195,9 +192,8 @@ export const corpusFooterRegion = defineRegion({
     optional: ["content"] as const,
   }),
   render: (ctx: RenderCtx<RenderInput, NamingStrategy>, s) => {
-    const elementId = ctx.naming.elemIdValue("footer", "region");
     return h.footer(
-      h.attrs({ id: elementId }, { class: ctx.cls("footer") }),
+      { class: "container" },
       s.content ? s.content(ctx) : null,
     );
   },
@@ -211,11 +207,7 @@ export const docsShellLayout = defineLayout({
   }),
   headSlots: headSlotSpec,
   render: (ctx: RenderCtx<RenderInput, NamingStrategy>, api, s) =>
-    h.section(
-      {
-        class: ctx.cls("docs-shell"),
-        id: ctx.naming.elemIdValue("shell", "layout"),
-      },
+    h.div(
       api.region(
         "Header",
         optionalSlots({
@@ -270,11 +262,7 @@ export const docLandingLayout = defineLayout({
   }),
   headSlots: headSlotSpec,
   render: (ctx: RenderCtx<RenderInput, NamingStrategy>, api, s) =>
-    h.section(
-      {
-        class: ctx.cls("landing"),
-        id: ctx.naming.elemIdValue("landing", "layout"),
-      },
+    h.div(
       api.region(
         "Header",
         optionalSlots({
@@ -284,19 +272,19 @@ export const docLandingLayout = defineLayout({
         }),
       ),
       h.main(
-        { class: ctx.cls("landing__main") },
-        h.section({ class: ctx.cls("landing__hero") }, s.hero(ctx)),
-        s.featured
-          ? h.section({ class: ctx.cls("landing__featured") }, s.featured(ctx))
-          : null,
-        h.section({ class: ctx.cls("landing__sections") }, s.sections(ctx)),
+        { class: "container" },
+        h.article(
+          h.header(s.hero(ctx)),
+          s.featured ? h.aside(s.featured(ctx)) : null,
+          s.sections(ctx),
+        ),
       ),
       api.region("Footer", optionalSlots({ content: s.footer })),
     ),
 });
 
 export function corpusDesignSystem(dsName = "corpus-ds") {
-  return createDesignSystem<RenderInput>(dsName, naming)
+  const ds = createDesignSystem<RenderInput>(dsName, naming)
     .policies({ wrappers: { enabled: false } })
     .uaDependencies([
       {
@@ -318,4 +306,158 @@ export function corpusDesignSystem(dsName = "corpus-ds") {
     .layout(docPageLayout)
     .layout(docLandingLayout)
     .build();
+
+  const defaultHead = headSlots({
+    styles: [
+      h.style(`
+        :root {
+          font-size: 85%;
+        }
+
+        header nav {
+          align-items: center;
+          gap: 1rem;
+          padding: 0.75rem 0;
+        }
+
+        header nav ul {
+          gap: 0.75rem;
+          margin: 0;
+        }
+
+        header nav ul:first-of-type {
+          margin-right: 0.5rem;
+        }
+
+        header nav ul:first-of-type strong {
+          font-size: 1rem;
+        }
+
+        header form[role="search"] {
+          margin-left: auto;
+          min-width: 16rem;
+        }
+
+        header form[role="search"] input[type="search"] {
+          border-radius: 999px;
+          background: var(--pico-card-background-color);
+        }
+
+        main .grid {
+          gap: 1.5rem;
+          grid-template-columns: 220px minmax(0, 1fr) 200px;
+          align-items: start;
+        }
+
+        main aside {
+          position: relative;
+        }
+
+        main article {
+          background: var(--pico-card-background-color);
+          border: 1px solid var(--pico-card-border-color);
+          border-radius: var(--pico-border-radius);
+          box-shadow: var(--pico-box-shadow);
+          padding: 1.5rem;
+        }
+
+        main article h1 {
+          font-size: 2rem;
+          margin-bottom: 0.35rem;
+        }
+
+        main article h2 {
+          font-size: 1.25rem;
+          margin-top: 1.75rem;
+        }
+
+        .component-doc-subject label {
+          display: block;
+          margin-bottom: 0.25rem;
+          color: var(--pico-muted-color);
+          font-size: 0.85rem;
+          letter-spacing: 0.02em;
+        }
+
+        .component-doc-subject select {
+          width: 100%;
+          background-color: var(--pico-card-background-color);
+        }
+
+        .component-doc-tree__list {
+          list-style: none;
+          padding-left: 0;
+          margin: 0.5rem 0 0;
+        }
+
+        .component-doc-tree__item {
+          margin: 0.35rem 0;
+        }
+
+        .component-doc-tree__list--d0 > .component-doc-tree__item > a,
+        .component-doc-tree__list--d0 > .component-doc-tree__item > span {
+          font-weight: 600;
+        }
+
+        .component-doc-tree__link {
+          display: inline-block;
+          padding: 0.15rem 0;
+        }
+
+        .component-doc-tree__item--active > a {
+          font-weight: 600;
+          color: var(--pico-primary);
+        }
+
+        .component-doc-tree__list--d1 {
+          border-left: 1px solid var(--pico-muted-border-color);
+          margin-left: 0.5rem;
+          padding-left: 0.75rem;
+        }
+
+        .component-doc-tree__list--d1 a,
+        .component-doc-tree__label {
+          color: var(--pico-muted-color);
+          font-size: 0.95rem;
+        }
+
+        aside nav[aria-label="On this page"] ol {
+          padding-left: 1rem;
+        }
+
+        @media (max-width: 960px) {
+          header form[role="search"] {
+            margin-left: 0;
+            width: 100%;
+          }
+
+          main .grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `),
+    ],
+  });
+
+  const mergeHead = (
+    input?: HeadSlotInput<RenderInput, NamingStrategy>,
+  ) => {
+    const overrides = input ? headSlots(input) : {};
+    const merged = { ...defaultHead } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value) merged[key] = value;
+    }
+    return merged;
+  };
+
+  const page: typeof ds.page = (layoutName, renderCtx, options) =>
+    ds.page(layoutName, renderCtx, {
+      ...options,
+      headSlots: mergeHead(options.headSlots),
+    });
+
+  return {
+    ...ds,
+    page,
+  };
 }
