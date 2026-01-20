@@ -5,52 +5,56 @@ import {
 } from "../universal/fluent-ds.ts";
 import * as h from "../universal/fluent-html.ts";
 
-export type CardProps = {
+// deno-lint-ignore no-explicit-any
+type Any = any;
+
+export type CardProps<Ctx extends object = Record<PropertyKey, never>> = {
   readonly title?: string;
   readonly subtitle?: string;
-  readonly headerRight?: SlotBuilder<Record<PropertyKey, never>, NamingStrategy>;
-  readonly body: SlotBuilder<Record<PropertyKey, never>, NamingStrategy>;
-  readonly footer?: SlotBuilder<Record<PropertyKey, never>, NamingStrategy>;
+  readonly headerRight?: SlotBuilder<Ctx, NamingStrategy>;
+  readonly body: SlotBuilder<Ctx, NamingStrategy>;
+  readonly footer?: SlotBuilder<Ctx, NamingStrategy>;
   readonly class?: string;
 };
 
-export const Card = defineComponent<
-  CardProps,
-  Record<PropertyKey, never>,
-  NamingStrategy
->(
+export const card = defineComponent<CardProps<Any>, Any, NamingStrategy>(
   "Card",
   (ctx, props) => {
     const head = props.title || props.subtitle || props.headerRight;
-    const elementId = ctx.naming.elemDataId("Card", "component");
+    const elementId = ctx.naming.elemIdValue("Card", "component");
+    const elementIdAttr = ctx.naming.elemDataAttr(
+      "element-id",
+      elementId,
+      "component",
+    );
     return h.section(
       {
-        class: ctx.cls("fds-card", props.class),
-        "data-fds-element-id": elementId,
+        class: ctx.cls("card", props.class),
+        [elementIdAttr]: elementId,
       },
       head
         ? h.div(
-          { class: ctx.cls("fds-card__header") },
+          { class: ctx.cls("card__header") },
           h.div(
-            { class: ctx.cls("fds-card__heading") },
+            { class: ctx.cls("card__heading") },
             props.title
-              ? h.div({ class: ctx.cls("fds-card__title") }, props.title)
+              ? h.div({ class: ctx.cls("card__title") }, props.title)
               : null,
             props.subtitle
-              ? h.div({ class: ctx.cls("fds-card__subtitle") }, props.subtitle)
+              ? h.div({ class: ctx.cls("card__subtitle") }, props.subtitle)
               : null,
           ),
           props.headerRight
             ? h.div(
-              { class: ctx.cls("fds-card__headerRight") },
+              { class: ctx.cls("card__headerRight") },
               props.headerRight(ctx),
             )
             : null,
         )
         : null,
-      h.div({ class: ctx.cls("fds-card__body") }, props.body(ctx)),
+      h.div({ class: ctx.cls("card__body") }, props.body(ctx)),
       props.footer
-        ? h.div({ class: ctx.cls("fds-card__footer") }, props.footer(ctx))
+        ? h.div({ class: ctx.cls("card__footer") }, props.footer(ctx))
         : null,
     );
   },
@@ -58,33 +62,38 @@ export const Card = defineComponent<
 
 export type Breadcrumb = { readonly label: string; readonly href?: string };
 
-export const Breadcrumbs = defineComponent<
+export const breadcrumbs = defineComponent<
   { readonly items: readonly Breadcrumb[] },
-  Record<PropertyKey, never>,
+  Any,
   NamingStrategy
 >(
   "Breadcrumbs",
   (ctx, props) => {
-    const elementId = ctx.naming.elemDataId("Breadcrumbs", "component");
+    const elementId = ctx.naming.elemIdValue("Breadcrumbs", "component");
+    const elementIdAttr = ctx.naming.elemDataAttr(
+      "element-id",
+      elementId,
+      "component",
+    );
     return h.nav(
       {
-        class: ctx.cls("fds-breadcrumbs"),
+        class: ctx.cls("breadcrumbs"),
         "aria-label": "Breadcrumb",
-        "data-fds-element-id": elementId,
+        [elementIdAttr]: elementId,
       },
       h.ol(
-        { class: ctx.cls("fds-breadcrumbs__list") },
+        { class: ctx.cls("breadcrumbs__list") },
         h.each(props.items, (it, i) =>
           h.li(
-            { class: ctx.cls("fds-breadcrumbs__item") },
+            { class: ctx.cls("breadcrumbs__item") },
             it.href
               ? h.a(
-                { href: it.href, class: ctx.cls("fds-breadcrumbs__link") },
+                { href: it.href, class: ctx.cls("breadcrumbs__link") },
                 it.label,
               )
               : h.span(it.label),
             i < props.items.length - 1
-              ? h.span({ class: ctx.cls("fds-breadcrumbs__sep") }, "/")
+              ? h.span({ class: ctx.cls("breadcrumbs__sep") }, "/")
               : null,
           )),
       ),

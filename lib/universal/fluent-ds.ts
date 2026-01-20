@@ -1,8 +1,8 @@
 /**
  * Fluent Design System (`fluent-ds`)
  *
- * This module implements a fluent, type-safe design system runtime for server-side
- * (and hybrid server/client) HTML generation using fluent-html primitives.
+ * This module implements a fluent, type-safe design system runtime that builds
+ * HAST (Hypertext AST) nodes using fluent-html primitives.
  *
  * It is not a component library in the traditional React/Vue sense. Instead, it is a
  * structural composition system that models UI as:
@@ -11,8 +11,9 @@
  * - Regions: named structural containers within layouts
  * - Components: reusable leaf-level renderers used inside regions
  *
- * The system is intentionally SSR-first and deterministic. It produces HTML strings
- * with no hidden global state, no implicit registries, and no runtime mutation.
+ * The system is intentionally SSR-first and deterministic. It produces HAST
+ * (not strings) with no hidden global state, no implicit registries, and no
+ * runtime mutation. Rendering is delegated downstream to fluent-html utilities.
  *
  * Most design systems fail developers in two ways:
  *
@@ -68,7 +69,7 @@
  *
  * 3. Slots
  * --------
- * Slots are named render functions `(ctx) => RawHtml`.
+ * Slots are named render functions `(ctx) => HAST`.
  *
  * Slots are:
  * - Explicitly declared as required or optional
@@ -83,7 +84,7 @@
  *
  * They:
  * - Receive a RenderCtx and props
- * - Return RawHtml
+ * - Return HAST
  * - Can be traced for diagnostics
  *
  * Components never register themselves globally.
@@ -152,7 +153,7 @@
  *
  * 1. Create a design system:
  *
- *   const ds = createDesignSystem("my-ds")
+ *   const ds = createDesignSystem("my-ds", naming)
  *     .region(MyRegion)
  *     .layout(MyLayout)
  *     .uaDependencies([...])
@@ -160,12 +161,14 @@
  *
  * 2. Render a layout:
  *
- *   ds.render("AppShell", renderCtx, {
+ *   const hast = ds.render("AppShell", renderCtx, {
  *     slots: {
  *       headerLeft: ctx => ...
  *       content: ctx => ...
  *     }
  *   });
+ *
+ *   const html = h.render(hast);
  *
  * 3. Let the server expose ds.uaRoutes() and inject ds.uaHeadTags()
  *
@@ -180,6 +183,7 @@
  * without changing mental models or APIs.
  */
 import * as h from "./fluent-html.ts";
+import type { RawHtml } from "./fluent-html.ts";
 import {
   normalizeUaRoute,
   UaDependency,
@@ -193,8 +197,12 @@ type Any = any;
 type NamingKind = "layout" | "region" | "component";
 
 export type NamingStrategy = {
-  readonly elementId: (suggested: string, kind: NamingKind) => string;
-  readonly elemDataId: (suggested: string, kind: NamingKind) => string;
+  readonly elemIdValue: (suggested: string, kind: NamingKind) => string;
+  readonly elemDataAttr: (
+    suggestedKeyName: string,
+    suggestedValue: string,
+    kind: NamingKind,
+  ) => string;
   readonly className: (suggested: string, kind: NamingKind) => string;
 };
 
@@ -251,7 +259,7 @@ export type SlotBuilder<
   NS extends NamingStrategy = NamingStrategy,
 > = (
   ctx: RenderCtx<Ctx, NS>,
-) => h.RawHtml;
+) => RawHtml;
 
 export type DsPolicies = {
   readonly onTrace?: TraceSink;
@@ -259,19 +267,12 @@ export type DsPolicies = {
 
   readonly wrappers?: {
     readonly enabled?: boolean;
-    readonly attrPrefix?: string; // default "data-fds"
     readonly wrapperTag?: "section" | "div"; // default "section"
   };
 
   readonly dev?: {
     readonly unknownSlotMode?: "ignore" | "throw"; // default "throw"
   };
-};
-
-const defaultNaming: NamingStrategy = {
-  elementId: (suggested) => suggested,
-  elemDataId: (suggested) => suggested,
-  className: (suggested) => suggested,
 };
 
 function mapClassSpec(
@@ -363,7 +364,7 @@ export type RegionDef<
   readonly render: (
     ctx: RenderCtx<Ctx, NS>,
     slots: SlotBuilders<Spec, Ctx, NS>,
-  ) => h.RawHtml;
+  ) => RawHtml;
 };
 
 export type LayoutDef<
@@ -380,7 +381,7 @@ export type LayoutDef<
     ctx: RenderCtx<Ctx, NS>,
     api: DsApi<Any, Any, Ctx, NS>,
     slots: SlotBuilders<Spec, Ctx, NS>,
-  ) => h.RawHtml;
+  ) => RawHtml;
 };
 
 export function defineRegion<
@@ -412,7 +413,7 @@ export type Component<
 > = (
   ctx: RenderCtx<Ctx, NS>,
   props: Props,
-) => h.RawHtml;
+) => RawHtml;
 
 export function defineComponent<
   Props,
@@ -430,7 +431,7 @@ export function defineComponent<
     };
     ctx.trace({
       kind: "component",
-      elementId: ctx.naming.elementId(name, "component"),
+      elementId: ctx.naming.elemIdValue(name, "component"),
       className: ctx.naming.className(name, "component"),
       name,
     });
@@ -477,7 +478,7 @@ export type DsApi<
   >(
     name: N,
     slots: ExactSlots<R[N]["slots"], Actual, Ctx, NS>,
-  ) => h.RawHtml;
+  ) => RawHtml;
 
   readonly layout: <
     N extends keyof L & string,
@@ -486,7 +487,7 @@ export type DsApi<
     name: N,
     slots: ExactSlots<L[N]["slots"], Actual, Ctx, NS>,
     ctxOverrides?: Partial<Ctx>,
-  ) => h.RawHtml;
+  ) => RawHtml;
 };
 
 export type RenderOptionsFor<
@@ -528,25 +529,25 @@ export type DesignSystem<
 
   readonly uaDependencies: () => readonly h.UaDependency[];
   readonly uaRoutes: () => readonly UaRoute[];
-  readonly uaHeadTags: () => h.RawHtml;
+  readonly uaHeadTags: () => RawHtml;
 
   readonly render: <N extends keyof L>(
     layoutName: N,
     renderCtx: Ctx,
     options: RenderOptionsFor<L[N], Ctx, NS>,
-  ) => string;
+  ) => RawHtml;
 
   readonly renderPretty: <N extends keyof L>(
     layoutName: N,
     renderCtx: Ctx,
     options: RenderOptionsFor<L[N], Ctx, NS>,
-  ) => string;
+  ) => RawHtml;
 
   readonly page: <N extends keyof L>(
     layoutName: N,
     renderCtx: Ctx,
     options: PageOptionsFor<L[N], Ctx, NS>,
-  ) => string;
+  ) => RawHtml;
 };
 
 export type DsBuilder<
@@ -579,6 +580,7 @@ export function createDesignSystem<
   NS extends NamingStrategy = NamingStrategy,
 >(
   dsName: string,
+  naming: NS,
   // deno-lint-ignore ban-types
 ): DsBuilder<{}, {}, Ctx, NS> {
   const regions: Record<string, RegionDef<string, Any, Ctx, NS>> = {};
@@ -586,7 +588,7 @@ export function createDesignSystem<
 
   let tokenFn: (renderCtx: Ctx) => TokenBag = () => ({});
   let pol: DsPolicies = {
-    wrappers: { enabled: true, attrPrefix: "data-fds", wrapperTag: "section" },
+    wrappers: { enabled: true, wrapperTag: "section" },
     dev: { unknownSlotMode: "throw" },
   };
   let uaDepsFn: () => readonly UaDependency[] = () => [];
@@ -636,10 +638,10 @@ export function createDesignSystem<
             layouts,
             tokenFn,
             pol,
+            naming,
             layoutName as string,
             renderCtx,
             options.slots,
-            "min",
           ),
         renderPretty: (layoutName, renderCtx, options) =>
           renderInternal(
@@ -648,10 +650,10 @@ export function createDesignSystem<
             layouts,
             tokenFn,
             pol,
+            naming,
             layoutName as string,
             renderCtx,
             options.slots,
-            "pretty",
           ),
         page: (layoutName, renderCtx, options) =>
           renderPageInternal(
@@ -661,13 +663,13 @@ export function createDesignSystem<
             tokenFn,
             pol,
             uaDepsFn,
+            naming,
             layoutName as string,
             renderCtx,
             options.slots,
             options.headSlots as
               | Record<string, SlotBuilder<Ctx, NS>>
               | undefined,
-            "min",
           ),
       };
 
@@ -679,10 +681,14 @@ export function createDesignSystem<
 }
 
 /* -----------------------------------------------------------------------------
- * Runtime rendering
+ * HAST assembly
  * -------------------------------------------------------------------------- */
 
-type RenderMode = "min" | "pretty";
+function combineHast(...parts: RawHtml[]): RawHtml {
+  const nodes = parts.flatMap((p) => p.__nodes ?? []);
+  const raw = parts.map((p) => p.__rawHtml).join("");
+  return { __rawHtml: raw, __nodes: nodes };
+}
 
 function renderInternal<Ctx extends object, NS extends NamingStrategy>(
   dsName: string,
@@ -690,16 +696,14 @@ function renderInternal<Ctx extends object, NS extends NamingStrategy>(
   layouts: Record<string, LayoutDef<string, Any, Ctx, NS>>,
   tokensFn: (renderCtx: Ctx) => TokenBag,
   policy: DsPolicies,
+  naming: NS,
   layoutName: string,
   renderCtx: Ctx,
   layoutSlots: Record<string, SlotBuilder<Ctx, NS>>,
-  mode: RenderMode,
-): string {
+): RawHtml {
   if (policy.rawPolicy) h.setRawPolicy(policy.rawPolicy);
 
   const trace: TraceSink = (ev) => policy.onTrace?.(ev);
-  const naming = (renderCtx as { readonly naming?: NS }).naming ??
-    (defaultNaming as NS);
 
   const ctxBaseFields: RenderCtxBase<NS> = {
     ds: dsName,
@@ -744,7 +748,7 @@ function renderInternal<Ctx extends object, NS extends NamingStrategy>(
     layoutSlots,
   );
 
-  return mode === "pretty" ? h.renderPretty(raw) : h.render(raw);
+  return raw;
 }
 
 function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
@@ -754,17 +758,15 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
   tokensFn: (renderCtx: Ctx) => TokenBag,
   policy: DsPolicies,
   uaDepsFn: () => readonly UaDependency[],
+  naming: NS,
   layoutName: string,
   renderCtx: Ctx,
   layoutSlots: Record<string, SlotBuilder<Ctx, NS>>,
   headSlotsIn: Record<string, SlotBuilder<Ctx, NS>> | undefined,
-  mode: RenderMode,
-): string {
+): RawHtml {
   if (policy.rawPolicy) h.setRawPolicy(policy.rawPolicy);
 
   const trace: TraceSink = (ev) => policy.onTrace?.(ev);
-  const naming = (renderCtx as { readonly naming?: NS }).naming ??
-    (defaultNaming as NS);
 
   const ctxBaseFields: RenderCtxBase<NS> = {
     ds: dsName,
@@ -805,7 +807,7 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
   if (!def) throw new Error(`fluent-ds: unknown layout "${layoutName}"`);
 
   const uaHead = uaHeadTags(uaDepsFn());
-  const headChildren: h.RawHtml[] = [uaHead];
+  const headChildren: RawHtml[] = [uaHead];
 
   if (def.headSlots) {
     const normalized = normalizeAndValidateSlots(
@@ -836,7 +838,7 @@ function renderPageInternal<Ctx extends object, NS extends NamingStrategy>(
   );
   const doc = h.doctype();
 
-  return mode === "pretty" ? h.renderPretty(doc, page) : h.render(doc, page);
+  return combineHast(doc, page);
 }
 
 function invokeLayout<Ctx extends object, NS extends NamingStrategy>(
@@ -845,7 +847,7 @@ function invokeLayout<Ctx extends object, NS extends NamingStrategy>(
   api: DsApi<Any, Any, Ctx, NS>,
   layoutName: string,
   slotsIn: Record<string, SlotBuilder<Ctx, NS>>,
-): h.RawHtml {
+): RawHtml {
   const def = layouts[layoutName];
   if (!def) throw new Error(`fluent-ds: unknown layout "${layoutName}"`);
 
@@ -859,7 +861,7 @@ function invokeLayout<Ctx extends object, NS extends NamingStrategy>(
   layoutCtx.trace({
     kind: "layout",
     name: layoutName,
-    elementId: ctx.naming.elementId(layoutName, "layout"),
+    elementId: ctx.naming.elemIdValue(layoutName, "layout"),
     className: ctx.naming.className(layoutName, "layout"),
     phase: "enter",
   });
@@ -876,7 +878,7 @@ function invokeLayout<Ctx extends object, NS extends NamingStrategy>(
   layoutCtx.trace({
     kind: "layout",
     name: layoutName,
-    elementId: ctx.naming.elementId(layoutName, "layout"),
+    elementId: ctx.naming.elemIdValue(layoutName, "layout"),
     className: ctx.naming.className(layoutName, "layout"),
     phase: "exit",
   });
@@ -888,7 +890,7 @@ function invokeRegion<Ctx extends object, NS extends NamingStrategy>(
   ctx: RenderCtx<Ctx, NS>,
   regionName: string,
   slotsIn: Record<string, SlotBuilder<Ctx, NS>>,
-): h.RawHtml {
+): RawHtml {
   const def = regions[regionName];
   if (!def) throw new Error(`fluent-ds: unknown region "${regionName}"`);
 
@@ -901,7 +903,7 @@ function invokeRegion<Ctx extends object, NS extends NamingStrategy>(
   regionCtx.trace({
     kind: "region",
     name: regionName,
-    elementId: ctx.naming.elementId(regionName, "region"),
+    elementId: ctx.naming.elemIdValue(regionName, "region"),
     className: ctx.naming.className(regionName, "region"),
     phase: "enter",
   });
@@ -919,7 +921,7 @@ function invokeRegion<Ctx extends object, NS extends NamingStrategy>(
   regionCtx.trace({
     kind: "region",
     name: regionName,
-    elementId: ctx.naming.elementId(regionName, "region"),
+    elementId: ctx.naming.elemIdValue(regionName, "region"),
     className: ctx.naming.className(regionName, "region"),
     phase: "exit",
   });
@@ -972,25 +974,29 @@ function normalizeAndValidateSlots<
 
 function wrapRegion<Ctx extends object, NS extends NamingStrategy>(
   ctx: RenderCtx<Ctx, NS>,
-  inner: h.RawHtml,
-): h.RawHtml {
-  const w = ctx.policy.wrappers ??
-    { enabled: true, attrPrefix: "data-fds", wrapperTag: "section" };
+  inner: RawHtml,
+): RawHtml {
+  const w = ctx.policy.wrappers ?? { enabled: true, wrapperTag: "section" };
   if (w.enabled === false) return inner;
 
-  const p = w.attrPrefix ?? "data-fds";
   const tag = w.wrapperTag ?? "section";
 
+  const kind: NamingKind = ctx.region ? "region" : "layout";
+  const elementId = ctx.naming.elemIdValue(
+    ctx.region ?? ctx.layout,
+    kind,
+  );
+
   const a: h.Attrs = {
-    [`${p}-ds`]: ctx.ds,
-    [`${p}-layout`]: ctx.naming.className(ctx.layout, "layout"),
-    [`${p}-region`]: ctx.region
+    [ctx.naming.elemDataAttr("ds", ctx.ds, kind)]: ctx.ds,
+    [ctx.naming.elemDataAttr("layout", ctx.layout, kind)]: ctx.naming.className(
+      ctx.layout,
+      "layout",
+    ),
+    [ctx.naming.elemDataAttr("region", ctx.region ?? "", kind)]: ctx.region
       ? ctx.naming.className(ctx.region, "region")
       : "",
-    [`${p}-element-id`]: ctx.naming.elemDataId(
-      ctx.region ?? ctx.layout,
-      ctx.region ? "region" : "layout",
-    ),
+    [ctx.naming.elemDataAttr("element-id", elementId, kind)]: elementId,
   };
 
   const renderCtx = ctx as Record<string, unknown>;
@@ -1000,7 +1006,7 @@ function wrapRegion<Ctx extends object, NS extends NamingStrategy>(
       typeof value === "string" || typeof value === "number" ||
       typeof value === "boolean"
     ) {
-      a[`${p}-${key}`] = value;
+      a[ctx.naming.elemDataAttr(key, String(value), kind)] = value;
     }
   }
 

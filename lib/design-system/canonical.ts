@@ -16,13 +16,13 @@ import * as h from "../universal/fluent-html.ts";
  * Canonical Regions
  * -------------------------------------------------------------------------- */
 
-export const HeaderRegion = defineRegion({
+export const headerRegion = defineRegion({
   name: "Header",
   slots: slots({
     optional: ["left", "center", "right", "row2"] as const,
   }),
   render: (ctx, s) => {
-    const elementId = ctx.naming.elementId("Header", "region");
+    const elementId = ctx.naming.elemIdValue("Header", "region");
     const left = s.left ? s.left(ctx) : h.comment("Header.left");
     const center = s.center ? s.center(ctx) : h.comment("Header.center");
     const right = s.right ? s.right(ctx) : h.comment("Header.right");
@@ -43,14 +43,14 @@ export const HeaderRegion = defineRegion({
   },
 });
 
-export const BreadcrumbsRegion = defineRegion({
+export const breadcrumbsRegion = defineRegion({
   name: "Breadcrumbs",
   slots: slots({
     required: ["crumbs"] as const,
     optional: ["actions"] as const,
   }),
   render: (ctx, s) => {
-    const elementId = ctx.naming.elementId("Breadcrumbs", "region");
+    const elementId = ctx.naming.elemIdValue("Breadcrumbs", "region");
     return h.div(
       { class: ctx.cls("fds-bcbar"), id: elementId },
       h.div({ class: ctx.cls("fds-bcbar__crumbs") }, s.crumbs(ctx)),
@@ -61,14 +61,14 @@ export const BreadcrumbsRegion = defineRegion({
   },
 });
 
-export const MainRegion = defineRegion({
+export const mainRegion = defineRegion({
   name: "Main",
   slots: slots({
     required: ["content"] as const,
     optional: ["sidebar", "rail"] as const,
   }),
   render: (ctx, s) => {
-    const elementId = ctx.naming.elementId("Main", "region");
+    const elementId = ctx.naming.elemIdValue("Main", "region");
     const sidebar = s.sidebar ? s.sidebar(ctx) : h.comment("Main.sidebar");
     const rail = s.rail ? s.rail(ctx) : h.comment("Main.rail");
 
@@ -84,13 +84,13 @@ export const MainRegion = defineRegion({
   },
 });
 
-export const FooterRegion = defineRegion({
+export const footerRegion = defineRegion({
   name: "Footer",
   slots: slots({
     optional: ["left", "center", "right"] as const,
   }),
   render: (ctx, s) => {
-    const elementId = ctx.naming.elementId("Footer", "region");
+    const elementId = ctx.naming.elemIdValue("Footer", "region");
     const left = s.left ? s.left(ctx) : h.comment("Footer.left");
     const center = s.center ? s.center(ctx) : h.comment("Footer.center");
     const right = s.right ? s.right(ctx) : h.comment("Footer.right");
@@ -132,7 +132,7 @@ function optionalSlots<
   return out;
 }
 
-export const AppShellLayout = defineLayout({
+export const appShellLayout = defineLayout({
   name: "AppShell",
   slots: slots({
     required: ["breadcrumbs", "content"] as const,
@@ -154,7 +154,7 @@ export const AppShellLayout = defineLayout({
   }),
 
   render: (ctx, api, s) => {
-    const elementId = ctx.naming.elementId("AppShell", "layout");
+    const elementId = ctx.naming.elemIdValue("AppShell", "layout");
     return h.div(
       { class: ctx.cls("fds-appshell"), id: elementId },
       api.region(
@@ -190,12 +190,18 @@ export const AppShellLayout = defineLayout({
  * Canonical DS factory (typed builder -> build())
  * -------------------------------------------------------------------------- */
 
-export function createCanonicalFluentDs(dsName = "fluent-ds") {
-  return createDesignSystem(dsName)
+export function canonicalDesignSystem(dsName = "canonical-ds") {
+  const naming: NamingStrategy = {
+    elemIdValue: (suggested) => suggested,
+    elemDataAttr: (suggestedKeyName, _suggestedValue, _kind) =>
+      `data-fds-${suggestedKeyName}`,
+    className: (suggested) => suggested,
+  };
+
+  return createDesignSystem(dsName, naming)
     .policies({
       wrappers: {
         enabled: true,
-        attrPrefix: "data-fds",
         wrapperTag: "section",
       },
       dev: { unknownSlotMode: "throw" },
@@ -203,24 +209,24 @@ export function createCanonicalFluentDs(dsName = "fluent-ds") {
     .uaDependencies(() =>
       [
         {
-          mountPoint: "/_fds/fluent-ds.css",
-          canonicalSource: "/abs/path/to/fluent-ds.css",
+          mountPoint: "/canonical-ds/canonical.css",
+          canonicalSource: import.meta.resolve("./canonical.css"),
           mimeType: "text/css",
           cache: { maxAgeSeconds: 3600, immutable: true, etag: "strong" },
         },
         {
-          mountPoint: "/_fds/fluent-ds.js",
-          canonicalSource: "/abs/path/to/fluent-ds.js",
+          mountPoint: "/canonical-ds/canonical.js",
+          canonicalSource: import.meta.resolve("./canonical.js"),
           mimeType: "application/javascript",
           as: "module",
           cache: { maxAgeSeconds: 3600, immutable: true, etag: "strong" },
         },
       ] as const
     )
-    .region(HeaderRegion)
-    .region(BreadcrumbsRegion)
-    .region(MainRegion)
-    .region(FooterRegion)
-    .layout(AppShellLayout)
+    .region(headerRegion)
+    .region(breadcrumbsRegion)
+    .region(mainRegion)
+    .region(footerRegion)
+    .layout(appShellLayout)
     .build();
 }
