@@ -1,10 +1,19 @@
-# Junxion UX: an AI-first, hypermedia-native UX library
+# Junxion UX: an AI-first, hypermedia-native UX family
 
-Junxion UX is a small, composable UX library designed for modern server-centric
-web applications that must remain understandable, testable, and maintainable as
-complexity grows. It is not a framework. It is a set of tightly scoped libraries
-that work together to support progressive enhancement, typed hypermedia
-interactions, and AI-first maintenance.
+Junxion UX is a family of integrated user experience (UX) libraries and services
+for modern server-centric web applications. It is not a framework. It is a set
+of tightly scoped libraries that work together to support progressive
+enhancement, typed hypermedia interactions, AI-first maintenance, and a full
+design system for Deno microservices and CLIs.
+
+The core promise: teams can build compelling web-based UIs with “natural” HTML
+authoring (functions, not tags), without inventing templating DSLs, while
+getting a cohesive design system that produces good-looking UIs without every
+developer becoming a designer.
+
+Junxion UX also ships an integrated CSS framework through its design systems, so
+you can deliver outstanding UI without pulling in Tailwind or other external CSS
+libraries.
 
 At a high level, Junxion UX brings together four ideas:
 
@@ -12,6 +21,34 @@ At a high level, Junxion UX brings together four ideas:
 - Typed hypermedia interactions instead of opaque client frameworks
 - Progressive client complexity, added only when needed
 - A codebase structured so AI systems can safely maintain it end to end
+
+Junxion UX is not trying to be Ruby on Rails, Express, Next.js, Astro, Hono,
+jQuery, or a general-purpose web framework. Those ecosystems solve broad web
+application problems across many runtimes. Junxion UX is intentionally narrower:
+a special-purpose, AI-maintainable family of UX libraries for type-safe Deno
+services, Deno microservices, and Deno CLIs that need rich, server-directed web
+interfaces.
+
+Our focus is different:
+
+- Type-safe Deno services end to end (routing, HTML, interactions, schemas)
+- Server-first hypermedia as the default UX substrate
+- Progressive enhancement rather than a forced SPA model
+- Deterministic behavior and tests so AI systems can maintain the stack
+- Small, explicit libraries over opaque frameworks
+- Vertical integration of the typical necessities for production-grade
+  enterprise micro-UIs (HTML, CSS, HTTP, SSE, proxying, and routing)
+- A single-language, type-safe TypeScript stack instead of a patchwork of
+  templating engines, CSS frameworks, and build-time ecosystems
+
+_Continuux_ is the interaction engine. _Natural HTML_ is the rendering substrate
+(no DSLs or templates). _Natural DS_ supplies the CSS framework and page chrome
+without external dependencies. _Web Components_ are the scaling mechanism for
+client complexity. Deterministic testing is the enforcement layer.
+
+Together, these form Junxion UX: a pragmatic, AI-first family of libraries for
+building modern web UIs that remain understandable long after the original
+authors, human or otherwise, have moved on.
 
 ## Quick Start
 
@@ -31,7 +68,9 @@ Get a flavor for the code in the initial developer experience (DX) entry points:
 $ ./support/learn/index.ts                     # launch the "Learning Resources Server"
 ```
 
-You can also run each one individually:
+If you run `support/learn/index.ts` it will let you run each of the example
+learning resources in the integrate "Learning Resources Server" (`LRS`).
+However, you can also run each one individually without using the `LRS`:
 
 ```bash
 $ ./support/learn/01-hello/counter.ts          # interactive counter (SSR + SSE) increment app
@@ -54,13 +93,21 @@ Junxion UX is organized intentionally by concern, not by runtime.
 Modules that are broadly useful across server and client contexts, independent
 of Continuux itself.
 
-- `elements.ts` is dependency-free, type-safe HTML builder for server-side
-  rendering and tests. It replaces JSX, templating engines, and DOM mutation
-  with explicit, deterministic HTML generation. It is the foundation for all SSR
-  in Junxion UX.
+- `elements.ts` is a dependency-free, type-safe HTML builder that emits HAST for
+  deterministic server-side rendering and tests. It replaces JSX, templating
+  engines, and DOM mutation with explicit HTML generation, safe raw content
+  handling, and stable attribute ordering. It is the foundation for all SSR in
+  Junxion UX.
 - `elements-dom.js` is a twin of `elements.ts` for web browser user agents.
 - Other universal helpers Utilities that are safe to use anywhere and have no
   browser- or server-specific assumptions.
+- `design-system.ts` is the highly opinionated, full-stack UI contract. It
+  models layouts, regions, slots, and components with strict typing so illegal
+  UI states are unrepresentable at compile time and validated at runtime in dev.
+  It is SSR-first, deterministic, and designed to be the backbone for design
+  systems that compile down to Natural HTML. It also carries integrated UA
+  dependencies (CSS and JS) so design systems can ship a cohesive visual
+  framework without external CSS libraries.
 
 ### `lib/continuux`
 
@@ -70,6 +117,12 @@ talk to each other using typed contracts.
 - `http.ts`, `bundle.ts`, and related helpers provide Infrastructure for SSE
   sessions, HTTP responses, and optional on-the-fly bundling of browser modules,
   kept minimal and auditable.
+
+- `http-fs-routes.ts` provides dynamic, file-based routing for TypeScript and
+  HTML assets, with mount points, index resolution, and content transforms.
+
+- `http-proxy.ts` provides a typed reverse proxy layer for enterprise micro-UIs
+  that need to bridge upstream services without adding another runtime.
 
 - `interaction.ts` defines the canonical interaction envelope, event metadata,
   schema decoding, routing, and diagnostics. This is the server-side foundation
@@ -85,11 +138,39 @@ talk to each other using typed contracts.
 
 - `interaction-html.ts` is a type-safe HTML and server wiring helpers that
   provide the ergonomic surface area similar to HTMX or Datastar, but without
-  stringly-typed attributes. It bridges Fluent HTML with Continuux interactions
+  stringly-typed attributes. It bridges Natural HTML with Continuux interactions
   so developers write functions, not attribute names.
 
 Together, these form Continuux: the server-directed interaction layer inside
 Junxion UX.
+
+### `lib/natural-ds`
+
+Natural DS is the canonical “Natural Design System” built on the Natural HTML
+design-system runtime. It provides a concrete, opinionated set of layouts,
+regions, and components (for example `NaturalDoc` and its header/sidebar/toc
+regions) that power real pages and demos in this repo. It is the reference
+design system for Junxion UX, but it is not the only option: other design
+systems can be created that look completely different while retaining the same
+type-safe, deterministic contract.
+
+Natural DS also delivers an integrated CSS framework so teams can get
+production-grade UI styling without adopting Tailwind or other external CSS
+libraries.
+
+## Learning resources
+
+The `support/learn` area is the guided on-ramp. It is both human documentation
+and AI-readable specs for the system.
+
+- `support/learn/index.ts` runs the Learning Resources Server, a single UI that
+  launches each example on demand.
+- `support/learn/01-hello/*` demonstrates the Continuux interaction model with
+  plain Natural HTML (SSR, SSE, typed events).
+- `support/learn/02-starter-ds/*` shows how to layer in a starter design system
+  without introducing a template DSL.
+- `support/learn/03-natural-ds/*` walks through the full Natural DS experience,
+  from a minimal layout to the full reference guide.
 
 ## Core architectural concepts
 
@@ -102,7 +183,7 @@ This can be visualized as layers:
 ```
 Server
 |
-+-- Fluent HTML (SSR)
++-- Natural HTML (SSR)
 |
 +-- Continuux actions (typed hypermedia)
 |
@@ -112,7 +193,7 @@ Server
 ```
 Browser
 |
-+-- Native HTML rendering (with Fluent HTML DOM for helpers)
++-- Native HTML rendering (with Natural HTML DOM for helpers)
 |
 +-- Continuux browser UA (events + SSE)
 |
@@ -126,7 +207,7 @@ architecture.
 
 **Stage 1**: SSR only Most pages should live here.
 
-- Server renders HTML with Fluent HTML
+- Server renders HTML with Natural HTML
 - Links and forms drive navigation
 - Full page reloads are acceptable
 - State lives in URLs and server-side logic
@@ -193,26 +274,3 @@ added.
 This is essential for AI maintenance. AI systems iterate by running tests,
 observing failures, and refining behavior. Without deterministic tests, safe
 autonomous maintenance is not possible.
-
-## Why Junxion UX exists
-
-Junxion UX exists to fill a gap between two extremes:
-
-- Static SSR with no interactivity
-- Large client frameworks that push most logic into the browser
-
-It provides a disciplined middle ground:
-
-- Server-first by default
-- Hypermedia-driven interactions
-- Typed contracts everywhere
-- Progressive enhancement instead of premature complexity
-- A codebase small enough for AI to fully understand
-
-Continuux is the interaction engine. Fluent HTML is the rendering substrate. Web
-Components are the scaling mechanism for client complexity. Deterministic
-testing is the enforcement layer.
-
-Together, these form Junxion UX: a pragmatic, AI-first library for building
-modern web UIs that remain understandable long after the original authors, human
-or otherwise, have moved on.
