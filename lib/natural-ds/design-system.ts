@@ -8,7 +8,11 @@ import {
   NamingStrategy,
 } from "../natural-html/design-system.ts";
 import * as h from "../natural-html/elements.ts";
-import { HeadSlotInput, headSlots } from "../natural-html/patterns.ts";
+import {
+  HeadSlotInput,
+  headSlots,
+  RenderInput,
+} from "../natural-html/patterns.ts";
 import { naturalLayout } from "./layout/mod.ts";
 import {
   breadcrumbRowRegion,
@@ -17,7 +21,6 @@ import {
   mainContentRegion,
   rightSidebarRegion,
 } from "./region/mod.ts";
-import type { RenderInput } from "./shared.ts";
 
 export const naturalNaming: NamingStrategy = {
   elemIdValue: (suggested) => suggested,

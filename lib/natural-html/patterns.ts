@@ -24,6 +24,8 @@ export const headSlotSpec = slots({
   optional: ["title", "meta", "links", "styles", "scripts", "head"] as const,
 });
 
+export type RenderInput = Record<PropertyKey, never>;
+
 export type Content<Ctx extends object, NS extends NamingStrategy> =
   | SlotBuilder<Ctx, NS>
   | h.RawHtml

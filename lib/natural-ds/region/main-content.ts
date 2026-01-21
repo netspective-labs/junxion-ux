@@ -5,7 +5,7 @@ import {
   slots,
 } from "../../natural-html/design-system.ts";
 import * as h from "../../natural-html/elements.ts";
-import type { RenderInput } from "../shared.ts";
+import type { RenderInput } from "../../natural-html/patterns.ts";
 
 export const mainContentRegion = defineRegion({
   name: "MainContent",
