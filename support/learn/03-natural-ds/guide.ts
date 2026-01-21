@@ -1,16 +1,14 @@
 #!/usr/bin/env -S deno run -A --watch --unstable-bundle --node-modules-dir=auto
-// support/dx/ds/natural.ts
 /**
- * Natural DS reference app (mirrors platformds/public/natural-ds.html).
+ * Natural DS reference app (mirrors lib/natural-ds/natural-ds.html).
  *
  * Run:
- *   deno run -A --unstable-bundle support/dx/ds/natural.ts
+ *   deno run -A --unstable-bundle support/learn/03-natural-ds/guide.ts
  *
  * Then open:
  *   http://127.0.0.1:8000
  */
 import { Application } from "../../../lib/continuux/http.ts";
-import * as H from "../../../lib/natural-html/elements.ts";
 import {
   accordion,
   apiTable,
@@ -53,7 +51,8 @@ import {
   tabs,
   tocLink,
   tocList,
-} from "../../../lib/natural-html/design-system/natural.ts";
+} from "../../../lib/natural-ds/natural.ts";
+import * as H from "../../../lib/natural-html/elements.ts";
 import { headSlots } from "../../../lib/natural-html/patterns.ts";
 
 type State = Record<string, never>;

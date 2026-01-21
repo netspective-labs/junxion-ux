@@ -13,9 +13,13 @@ import {
   RenderCtx,
   SlotBuilder,
   slots,
-} from "../design-system.ts";
-import * as h from "../elements.ts";
-import { HeadSlotInput, headSlots, headSlotSpec } from "../patterns.ts";
+} from "../natural-html/design-system.ts";
+import * as h from "../natural-html/elements.ts";
+import {
+  HeadSlotInput,
+  headSlots,
+  headSlotSpec,
+} from "../natural-html/patterns.ts";
 
 type RenderInput = Record<PropertyKey, never>;
 

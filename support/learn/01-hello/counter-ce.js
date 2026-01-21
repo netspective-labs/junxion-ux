@@ -1,6 +1,5 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
-// support/dx/hello/counter-ce.js
 //
 // Minimal <counter-ce> using CxAide convenience binds.
 

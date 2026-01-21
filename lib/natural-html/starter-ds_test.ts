@@ -1,8 +1,8 @@
 // lib/natural-html/design-system/starter_test.ts
 import { assertEquals } from "@std/assert";
-import { starterDesignSystem } from "./starter.ts";
-import * as h from "../elements.ts";
-import { headSlots } from "../patterns.ts";
+import * as h from "./elements.ts";
+import { headSlots } from "./patterns.ts";
+import { starterDesignSystem } from "./starter-ds.ts";
 
 Deno.test("fluent-ds-starter: minimal body-only ds", () => {
   const ds = starterDesignSystem();

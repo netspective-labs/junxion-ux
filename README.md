@@ -28,11 +28,13 @@ $ deno task test                         # runs Deno unit tests
 Get a flavor for the code in the initial developer experience (DX) entry points:
 
 ```bash
-$ ./support/dx/hello/counter.ts      # interactive counter (SSR + SSE) increment app
-$ ./support/dx/hello/counter-ce.ts   # interactive counter (SSR + Web Component + SSE) increment app
-$ ./support/dx/hello/markdown.ts     # client-side markdown preview app with custom HTML
-$ ./support/dx/hello/markdown-ds.ts  # client-side markdown preview app with semantic design system
-$ ./support/dx/enterprise-ds/demo.ts # demo of Enterprise Design System
+$ ./support/learn/01-hello/counter.ts          # interactive counter (SSR + SSE) increment app
+$ ./support/learn/01-hello/counter-ce.ts       # interactive counter (SSR + Web Component + SSE) increment app
+$ ./support/learn/01-hello/markdown.ts         # client-side markdown preview app with custom HTML
+$ ./support/learn/02-starter-ds/starter-ds.ts  # client-side markdown preview app with Starter DS
+
+$ ./support/learn/03-natural-ds/hello-fancy.ts # client-side markdown preview app with Natural DS
+$ ./support/learn/03-natural-ds/guide.ts       # demo of full Natural Design System
 ```
 
 ## Modules

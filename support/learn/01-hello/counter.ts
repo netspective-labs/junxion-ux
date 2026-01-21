@@ -1,5 +1,4 @@
 #!/usr/bin/env -S deno run -A --watch --unstable-bundle --node-modules-dir=auto
-// support/assurance/hello/counter.ts
 /**
  * ContinuUX “Hello World” (Counter) app.
  *
@@ -13,7 +12,7 @@
  * - PicoCSS via CDN
  *
  * Run:
- *   deno run -A support/assurance/hello/counter.ts
+ *   deno run -A support/learn/01-hello/counter.ts
  */
 
 import * as H from "../../../lib/natural-html/elements.ts";

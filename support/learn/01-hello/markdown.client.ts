@@ -1,6 +1,5 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
-// support/assurance/hello/markdown.client.ts
 /**
  * Browser client for the ContinuUX Markdown example.
  *

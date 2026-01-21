@@ -1,34 +1,30 @@
 #!/usr/bin/env -S deno run -A --watch --unstable-bundle --node-modules-dir=auto
-// support/dx/ds/starter.ts
 /**
- * ContinuUX "Hello World" (Starter DS + Markdown) app.
+ * ContinuUX “Hello World” (Markdown) app.
  *
  * What this demonstrates end-to-end:
- * - Fluent DS starter layout on the server (no templating engine).
+ * - Fluent HTML on the server (no templating engine).
  * - Fully type-safe HTTP routing (Application).
- * - PicoCSS via DS UA dependencies.
+ * - PicoCSS via CDN (no build step).
  * - Browser-only Markdown rendering using remark from CDN:
- *   - Fetch /example.md (example markdown)
+ *   - Fetch /README.md (example markdown)
  *   - Render it to HTML in the browser
  *
  * Run:
- *   deno run -A --unstable-bundle support/dx/ds/starter.ts
+ *   deno run -A --unstable-bundle support/learn/01-hello/markdown.ts
  *
  * Then open:
  *   http://127.0.0.1:8000
  */
 
 import { autoTsJsBundler } from "../../../lib/continuux/bundle.ts";
-import { Application } from "../../../lib/continuux/http.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
-import { starterDesignSystem } from "../../../lib/natural-html/design-system/starter.ts";
-import { headSlots } from "../../../lib/natural-html/patterns.ts";
+import { Application } from "../../../lib/continuux/http.ts";
 
 type State = Record<string, never>;
 type Vars = Record<string, never>;
 
 const app = Application.sharedState<State, Vars>({});
-const ds = starterDesignSystem();
 
 const exampleMarkdown = `# Hello Markdown 👋
 
@@ -44,18 +40,36 @@ If you change \`/example.md\`, refresh the page and you’ll see the updated ren
 `;
 
 const pageHtml = (): string => {
-  const page = ds.page("Starter", {}, {
-    slots: {
-      title: () => H.span("ContinuUX Hello Markdown"),
-      lead: () =>
-        H.p("PicoCSS + Remark in-browser markdown rendering (bundled TS)."),
-      content: () =>
-        H.div(
+  const picoHref =
+    "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css";
+
+  return H.render(
+    H.doctype(),
+    H.html(
+      { lang: "en" },
+      H.head(
+        H.meta({ charset: "utf-8" }),
+        H.meta({
+          name: "viewport",
+          content: "width=device-width, initial-scale=1",
+        }),
+        H.title("ContinuUX Hello Markdown"),
+        H.link({ rel: "stylesheet", href: picoHref }),
+        H.style(`
+          :root {
+            font-size: 85%;
+          }
+        `),
+      ),
+      H.body(
+        H.main(
+          { class: "container", style: "max-width: 820px; padding-top: 2rem;" },
+          H.hgroup(
+            H.h1("ContinuUX Hello Markdown"),
+            H.p("PicoCSS + Remark in-browser markdown rendering (bundled TS)"),
+          ),
           H.article(
-            H.div(
-              { id: "status", "aria-busy": "true" },
-              "Loading markdown...",
-            ),
+            H.div({ id: "status", "aria-busy": "true" }, "Loading markdown..."),
             H.div({ id: "content" }, ""),
           ),
           H.small(
@@ -65,21 +79,11 @@ const pageHtml = (): string => {
             " (bundled from TypeScript).",
           ),
         ),
-    },
-    headSlots: headSlots({
-      title: "ContinuUX Hello Markdown (Starter DS)",
-      meta: [
-        H.meta({ charset: "utf-8" }),
-        H.meta({
-          name: "viewport",
-          content: "width=device-width, initial-scale=1",
-        }),
-      ],
-      scripts: [H.script({ type: "module", src: "/markdown.client.ts" })],
-    }),
-  });
-
-  return H.render(page);
+        // Load bundled client JS
+        H.script({ type: "module", src: "/markdown.client.ts" }),
+      ),
+    ),
+  );
 };
 
 // Put middleware BEFORE routes.
@@ -95,7 +99,7 @@ app.use(
   autoTsJsBundler({
     isCandidate: (url) =>
       url.pathname == "/markdown.client.ts"
-        ? new URL("../hello/markdown.client.ts", import.meta.url).pathname
+        ? new URL("./markdown.client.ts", import.meta.url).pathname
         : false,
     jsThrowStatus: () => 200, // show message in the browser
   }),

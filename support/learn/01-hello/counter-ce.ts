@@ -1,7 +1,6 @@
 #!/usr/bin/env -S deno run -A --watch --node-modules-dir=auto
-// support/dx/hello/counter-ce.ts
 /**
- * @module support/dx/hello/counter-ce
+ * @module support/learn/01-hello/counter-ce.ts
  *
  * ContinuUX “Hello World” (Counter) using Custom Elements as the primary
  * interactivity boundary.
