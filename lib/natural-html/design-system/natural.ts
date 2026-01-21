@@ -998,24 +998,29 @@ const contentStyles: ComponentStylesheets = [
       fontSize: "32px",
       fontWeight: 700,
       marginBottom: "8px",
+      display: "block",
     },
     "type-scale-section": {
       fontSize: "22px",
       fontWeight: 600,
       marginBottom: "8px",
+      display: "block",
     },
     "type-scale-subsection": {
       fontSize: "18px",
       fontWeight: 600,
       marginBottom: "8px",
+      display: "block",
     },
     "type-scale-body": {
       fontSize: "15px",
       marginBottom: "8px",
+      display: "block",
     },
     "type-scale-small": {
       fontSize: "13px",
       color: "#737373",
+      display: "block",
     },
     "feature-grid": {
       display: "grid",
@@ -1436,6 +1441,22 @@ const contentStyles: ComponentStylesheets = [
     "example-content": {
       padding: "20px",
       background: "#fff",
+      display: "block",
+    },
+    "badge-row": {
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+    },
+    "keyboard-row": {
+      display: "flex",
+      gap: "24px",
+      flexWrap: "wrap",
+    },
+    "keyboard-label": {
+      color: "#737373",
+      fontSize: "13px",
+      marginRight: "8px",
     },
     "color-grid": {
       display: "grid",

@@ -871,7 +871,7 @@ const pageHtml = (): string => {
             exampleWrapper(ctx, {
               label: "All Variants",
               content: H.div(
-                { style: "display: flex; gap: 8px; flex-wrap: wrap" },
+                { class: "badge-row" },
                 badge(ctx, { label: "Default", variant: "default" }),
                 badge(ctx, { label: "Primary", variant: "primary" }),
                 badge(ctx, { label: "Success", variant: "success" }),
@@ -903,33 +903,24 @@ const pageHtml = (): string => {
             exampleWrapper(ctx, {
               label: "Examples",
               content: H.div(
-                { style: "display: flex; gap: 24px; flex-wrap: wrap" },
+                { class: "keyboard-row" },
                 H.div(
                   H.span(
-                    {
-                      style:
-                        "color: #737373; font-size: 13px; margin-right: 8px",
-                    },
+                    { class: "keyboard-label" },
                     "Search:",
                   ),
                   keyboardShortcut(ctx, { keys: ["Cmd", "K"] }),
                 ),
                 H.div(
                   H.span(
-                    {
-                      style:
-                        "color: #737373; font-size: 13px; margin-right: 8px",
-                    },
+                    { class: "keyboard-label" },
                     "Save:",
                   ),
                   keyboardShortcut(ctx, { keys: ["Ctrl", "S"] }),
                 ),
                 H.div(
                   H.span(
-                    {
-                      style:
-                        "color: #737373; font-size: 13px; margin-right: 8px",
-                    },
+                    { class: "keyboard-label" },
                     "Copy:",
                   ),
                   keyboardShortcut(ctx, { keys: ["Cmd", "C"] }),
