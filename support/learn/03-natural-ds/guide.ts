@@ -51,7 +51,7 @@ import {
   tabs,
   tocLink,
   tocList,
-} from "../../../lib/natural-ds/natural.ts";
+} from "../../../lib/natural-ds/design-system.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
 import { headSlots } from "../../../lib/natural-html/patterns.ts";
 
@@ -493,7 +493,7 @@ const pageHtml = (): string => {
               subsectionHeading(ctx, { title: "Enhanced Block" }),
             ),
             codeBlockEnhanced(ctx, {
-              filename: "natural.ts",
+              filename: "design-system.ts",
               language: "TypeScript",
               languageClass: "ts",
               content: H.pre(

@@ -23,7 +23,7 @@ import {
   navSection,
   pageHeader,
   sidebarHeader,
-} from "../../../lib/natural-ds/natural.ts";
+} from "../../../lib/natural-ds/design-system.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
 import { headSlots } from "../../../lib/natural-html/patterns.ts";
 

@@ -1,5 +1,5 @@
 /**
- * @module lib/natural-html/design-system/natural.ts
+ * @module lib/natural-html/design-system/design-system.ts
  *
  * Natural DS derived from natural-ds.html reference.
  */
@@ -2285,7 +2285,8 @@ export const rightSidebarRegion = defineRegion({
         class: "right-sidebar",
         style: ctx.css({
           position: "fixed",
-          top: "calc(var(--context-header-height) + var(--breadcrumb-row-height))",
+          top:
+            "calc(var(--context-header-height) + var(--breadcrumb-row-height))",
           right: 0,
           width: "200px",
           height:
@@ -2310,18 +2311,21 @@ export const naturalLayout = defineLayout({
   }),
   headSlots: headSlotSpec,
   render: (ctx, api, s) => {
-    const hasContextHeader = Boolean(s.contextHeader);
-    const hasSidebar = Boolean(s.sidebar);
-    const hasToc = Boolean(s.toc);
+    const contextHeader = s.contextHeader;
+    const sidebar = s.sidebar;
+    const toc = s.toc;
+    const hasContextHeader = Boolean(contextHeader);
+    const hasSidebar = Boolean(sidebar);
+    const hasToc = Boolean(toc);
 
     return h.div(
       {
         class: "page-layout",
         style: ctx.css({
           display: "grid",
-          gridTemplateColumns: `${
-            hasSidebar ? "280px" : "0px"
-          } 1fr ${hasToc ? "200px" : "0px"}`,
+          gridTemplateColumns: `${hasSidebar ? "280px" : "0px"} 1fr ${
+            hasToc ? "200px" : "0px"
+          }`,
           gridTemplateRows: "auto auto 1fr",
           minHeight: "100vh",
           fontFamily:
@@ -2334,13 +2338,13 @@ export const naturalLayout = defineLayout({
           "--breadcrumb-row-height": "45px",
         }),
       },
-      hasContextHeader
-        ? api.region("ContextHeader", { content: s.contextHeader })
+      contextHeader
+        ? api.region("ContextHeader", { content: contextHeader })
         : null,
-      hasSidebar ? api.region("LeftSidebar", { content: s.sidebar }) : null,
+      sidebar ? api.region("LeftSidebar", { content: sidebar }) : null,
       api.region("BreadcrumbRow", { crumbs: s.breadcrumbs }),
       api.region("MainContent", { content: s.content }),
-      hasToc ? api.region("RightSidebar", { content: s.toc }) : null,
+      toc ? api.region("RightSidebar", { content: toc }) : null,
     );
   },
 });
