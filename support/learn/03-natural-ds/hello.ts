@@ -23,9 +23,9 @@ import {
   navSection,
   pageHeader,
   sidebarHeader,
-} from "../../../lib/natural-ds/design-system.ts";
+} from "../../../lib/natural-ds/mod.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
-import { headSlots } from "../../../lib/natural-html/patterns.ts";
+import { combineHast, headSlots } from "../../../lib/natural-html/patterns.ts";
 
 type State = Record<string, never>;
 type Vars = Record<string, never>;
@@ -34,12 +34,6 @@ const app = Application.sharedState<State, Vars>({});
 const ds = naturalDesignSystem();
 
 const svg = (markup: string) => H.trustedRaw(markup);
-
-const combineHast = (...parts: H.RawHtml[]): H.RawHtml => {
-  const nodes = parts.flatMap((p) => p.__nodes ?? []);
-  const raw = parts.map((p) => p.__rawHtml).join("");
-  return { __rawHtml: raw, __nodes: nodes };
-};
 
 const icons = {
   toggle: svg(

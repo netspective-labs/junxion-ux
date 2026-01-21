@@ -10,6 +10,7 @@ import {
   defineComponent,
   defineRegion,
   NamingStrategy,
+  RenderCtx,
   SlotBuilder,
   SlotBuilders,
   slots,
@@ -22,6 +23,44 @@ type Any = any;
 export const headSlotSpec = slots({
   optional: ["title", "meta", "links", "styles", "scripts", "head"] as const,
 });
+
+export type Content<Ctx extends object, NS extends NamingStrategy> =
+  | SlotBuilder<Ctx, NS>
+  | h.RawHtml
+  | string
+  | null
+  | undefined;
+
+export function renderContent<Ctx extends object, NS extends NamingStrategy>(
+  ctx: RenderCtx<Ctx, NS>,
+  content: Content<Ctx, NS>,
+): h.RawHtml | null {
+  if (!content) return null;
+  if (typeof content === "function") return content(ctx);
+  if (typeof content === "string") return h.text(content);
+  return content;
+}
+
+export function renderContents<Ctx extends object, NS extends NamingStrategy>(
+  ctx: RenderCtx<Ctx, NS>,
+  items: readonly Content<Ctx, NS>[],
+): Array<h.RawHtml | null> {
+  return items.map((item) => renderContent(ctx, item));
+}
+
+export function combineHast(...parts: h.RawHtml[]): h.RawHtml {
+  const nodes = parts.flatMap((p) => p.__nodes ?? []);
+  const raw = parts.map((p) => p.__rawHtml).join("");
+  return { __rawHtml: raw, __nodes: nodes };
+}
+
+export function normalizeTabId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "tab";
+}
 
 export type HeadSlotInput<
   Ctx extends object = Record<PropertyKey, never>,
@@ -41,9 +80,7 @@ ${value}`;
 }
 
 export function headGroup(...parts: h.RawHtml[]): h.RawHtml {
-  const nodes = parts.flatMap((p) => p.__nodes ?? []);
-  const raw = parts.map((p) => p.__rawHtml).join("");
-  return { __rawHtml: raw, __nodes: nodes };
+  return combineHast(...parts);
 }
 
 function headSlot<Ctx extends object, NS extends NamingStrategy>(

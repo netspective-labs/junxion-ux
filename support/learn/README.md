@@ -2,6 +2,9 @@
 
 ## TODO
 
+- [ ] Generate learn_test.ts which imports all runnable code and just does a
+      "smoke test" by starting each server and using Playwright to hit test
+      pages.
 - [ ] Add unified learning UX which acts as a guide through all the code
 
 ## Prompt
