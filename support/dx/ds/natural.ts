@@ -119,11 +119,23 @@ const icons = {
   info: svg(
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
   ),
+  warning: svg(
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+  ),
+  tip: svg(
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>',
+  ),
   check: svg(
     '<svg class="option-checkmark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
   ),
   copy: svg(
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+  ),
+  folderIcon: svg(
+    '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>',
+  ),
+  fileIcon: svg(
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>',
   ),
 };
 
@@ -287,14 +299,14 @@ const pageHtml = (): string => {
           pageHeader(ctx, {
             title: "Design System Reference",
             description:
-              "A comprehensive guide to all available components, layout regions, and styling patterns in this design system.",
+              "A comprehensive guide to all available components, layout regions, and styling patterns in this design system. Use this page as your reference when building documentation sites.",
           }),
           H.section(
             { id: "layout" },
             sectionHeading(ctx, { title: "Layout Structure", href: "#layout" }),
             bodyText(ctx, {
               content:
-                "The layout uses a three-column grid that keeps navigation visible while preserving readable content width.",
+                "The design system uses a three-column CSS Grid layout that provides optimal reading experience for documentation content while keeping navigation accessible.",
             }),
             callout(ctx, {
               title: "Layout Grid",
@@ -312,17 +324,24 @@ const pageHtml = (): string => {
               ),
             }),
             subsectionHeading(ctx, { title: "Left Sidebar Regions" }),
+            bodyText(ctx, {
+              content:
+                "The left sidebar contains four distinct regions, each with specific functionality:",
+            }),
             definitionList(ctx, {
               items: [
                 definitionItem(ctx, {
                   term: ".sidebar-header",
-                  description:
-                    "Contains the logo/brand and theme toggle button. Uses flexbox with justify-content: space-between.",
+                  description: H.span(
+                    "Contains the logo/brand and theme toggle button. Uses flexbox with ",
+                    H.codeTag("justify-content: space-between"),
+                    ".",
+                  ),
                 }),
                 definitionItem(ctx, {
                   term: ".search-bar",
                   description:
-                    "Clickable search trigger with keyboard shortcut indicator.",
+                    "Clickable search trigger with keyboard shortcut indicator. Opens a modal for full-text search.",
                 }),
                 definitionItem(ctx, {
                   term: ".subject-area-selector",
@@ -331,8 +350,15 @@ const pageHtml = (): string => {
                 }),
                 definitionItem(ctx, {
                   term: ".nav-section",
-                  description:
-                    "Grouped navigation with category headers and active link styling.",
+                  description: H.span(
+                    "Grouped navigation with category headers (",
+                    H.codeTag(".nav-category"),
+                    ") and links (",
+                    H.codeTag(".nav-link"),
+                    "). Active link uses ",
+                    H.codeTag(".nav-link.active"),
+                    ".",
+                  ),
                 }),
               ],
             }),
@@ -342,7 +368,7 @@ const pageHtml = (): string => {
             sectionHeading(ctx, { title: "Color Palette", href: "#colors" }),
             bodyText(ctx, {
               content:
-                "Accent orange drives attention while neutrals provide a clean reading surface.",
+                "The design system uses a carefully selected color palette with orange as the primary accent color, providing good contrast and visual hierarchy.",
             }),
             subsectionHeading(ctx, { title: "Accent Colors" }),
             colorGrid(ctx, {
@@ -368,7 +394,7 @@ const pageHtml = (): string => {
             sectionHeading(ctx, { title: "Typography", href: "#typography" }),
             bodyText(ctx, {
               content:
-                "System fonts provide a native feel; code uses a monospace stack for clarity.",
+                "The design system uses a system font stack for optimal performance and native feel across platforms. Code uses a monospace font stack.",
             }),
             exampleWrapper(ctx, {
               label: "Type Scale",
@@ -392,22 +418,52 @@ const pageHtml = (): string => {
                 ),
               ),
             }),
+            subsectionHeading(ctx, { title: "Inline Code" }),
+            bodyText(ctx, {
+              content: H.span(
+                "Inline code uses the ",
+                H.codeTag("code"),
+                " element with a rose/red color for visual distinction: ",
+                H.codeTag("font-family: monospace"),
+                ".",
+              ),
+            }),
           ),
           H.section(
             { id: "spacing" },
             sectionHeading(ctx, { title: "Spacing", href: "#spacing" }),
             bodyText(ctx, {
               content:
-                "Spacing uses a 4px base scale, aligned to predictable increments.",
+                "The spacing system uses a 4px base unit with consistent multipliers throughout the design system.",
             }),
             apiTable(ctx, {
               head: ["Token", "Value", "Usage"],
               rows: [
-                ["spacing-xs", "4px", "Keyboard key gaps"],
-                ["spacing-sm", "8px", "Icon-text gaps"],
-                ["spacing-md", "16px", "Default padding"],
-                ["spacing-lg", "24px", "Card padding"],
-                ["spacing-xl", "40px", "Section spacing"],
+                [
+                  H.span({ class: "prop-name" }, "spacing-xs"),
+                  H.span({ class: "prop-default" }, "4px"),
+                  "Gap between keyboard keys, minimal spacing",
+                ],
+                [
+                  H.span({ class: "prop-name" }, "spacing-sm"),
+                  H.span({ class: "prop-default" }, "8px"),
+                  "Icon-text gaps, tight element spacing",
+                ],
+                [
+                  H.span({ class: "prop-name" }, "spacing-md"),
+                  H.span({ class: "prop-default" }, "16px"),
+                  "Default padding, sidebar gaps",
+                ],
+                [
+                  H.span({ class: "prop-name" }, "spacing-lg"),
+                  H.span({ class: "prop-default" }, "24px"),
+                  "Component margins, card padding",
+                ],
+                [
+                  H.span({ class: "prop-name" }, "spacing-xl"),
+                  H.span({ class: "prop-default" }, "40px"),
+                  "Page padding, section spacing",
+                ],
               ],
             }),
           ),
@@ -416,7 +472,7 @@ const pageHtml = (): string => {
             sectionHeading(ctx, { title: "Code Blocks", href: "#code-blocks" }),
             bodyText(ctx, {
               content:
-                "Use basic blocks for short snippets and enhanced blocks for full examples.",
+                "Code blocks come in two variants: basic blocks for simple snippets and enhanced blocks with header, filename, language badge, and copy functionality.",
             }),
             H.div(
               { id: "code-basic" },
@@ -479,10 +535,26 @@ const pageHtml = (): string => {
               copyLabel: "Copy",
               copyIcon: icons.copy,
             }),
+            callout(ctx, {
+              title: "Line Highlighting",
+              icon: icons.tip,
+              variant: "tip",
+              content: H.span(
+                "Add the ",
+                H.codeTag(".highlighted"),
+                " class to ",
+                H.codeTag(".code-line"),
+                " elements to emphasize specific lines with an orange background.",
+              ),
+            }),
           ),
           H.section(
             { id: "tabs" },
             sectionHeading(ctx, { title: "Tabs", href: "#tabs" }),
+            bodyText(ctx, {
+              content:
+                "Tabs allow users to switch between different content views without leaving the page. Common use cases include package managers, frameworks, and language variants.",
+            }),
             tabs(ctx, {
               tabs: [
                 {
@@ -540,15 +612,19 @@ const pageHtml = (): string => {
           H.section(
             { id: "callouts" },
             sectionHeading(ctx, { title: "Callouts", href: "#callouts" }),
+            bodyText(ctx, {
+              content:
+                "Callouts draw attention to important information. Use them sparingly to maintain impact. Three semantic variants are available.",
+            }),
             H.div(
               { id: "callout-default" },
               subsectionHeading(ctx, { title: "Default" }),
             ),
             callout(ctx, {
               title: "Warning",
-              icon: icons.info,
+              icon: icons.warning,
               content:
-                "Use callouts sparingly to highlight important information.",
+                "This is a default callout for important warnings or prerequisites that users should be aware of before proceeding.",
             }),
             H.div(
               { id: "callout-info" },
@@ -559,7 +635,7 @@ const pageHtml = (): string => {
               icon: icons.info,
               variant: "info",
               content:
-                "Use .callout.info for additional context or explanations.",
+                "Use .callout.info for additional context or explanations that help users understand concepts better.",
             }),
             H.div(
               { id: "callout-tip" },
@@ -567,36 +643,44 @@ const pageHtml = (): string => {
             ),
             callout(ctx, {
               title: "Tip",
-              icon: icons.info,
+              icon: icons.tip,
               variant: "tip",
               content:
-                "Use .callout.tip for best practices and recommendations.",
+                "Use .callout.tip for best practices, recommendations, and helpful suggestions that improve the user experience.",
             }),
           ),
           H.section(
             { id: "cards" },
             sectionHeading(ctx, { title: "Feature Cards", href: "#cards" }),
+            bodyText(ctx, {
+              content:
+                "Feature cards display related items in a grid layout. Each card has an icon, title, and description with hover effects for interactivity.",
+            }),
             featureGrid(ctx, {
               cards: [
                 featureCard(ctx, {
-                  icon: "A",
-                  title: "Composable",
-                  description: "Components share structure and tokens.",
+                  icon: "📦",
+                  title: "Modular Design",
+                  description:
+                    "Components are self-contained and can be used independently.",
                 }),
                 featureCard(ctx, {
-                  icon: "B",
-                  title: "Predictable",
-                  description: "Explicit layouts keep markup consistent.",
+                  icon: "🎨",
+                  title: "Customizable",
+                  description:
+                    "Override CSS variables to match your brand colors.",
                 }),
                 featureCard(ctx, {
-                  icon: "C",
-                  title: "Accessible",
-                  description: "ARIA-friendly patterns by default.",
+                  icon: "⚡",
+                  title: "Performant",
+                  description:
+                    "Minimal CSS with no JavaScript dependencies for base components.",
                 }),
                 featureCard(ctx, {
-                  icon: "D",
-                  title: "Fast",
-                  description: "Minimal DOM and optimized styles.",
+                  icon: "📱",
+                  title: "Responsive",
+                  description:
+                    "Adapts to any screen size with mobile-first breakpoints.",
                 }),
               ],
             }),
@@ -604,17 +688,44 @@ const pageHtml = (): string => {
           H.section(
             { id: "accordion" },
             sectionHeading(ctx, { title: "Accordion", href: "#accordion" }),
+            bodyText(ctx, {
+              content:
+                "Accordions hide content until expanded, perfect for FAQs, troubleshooting guides, or advanced options that don't need to be visible initially.",
+            }),
             accordion(ctx, {
               items: [
                 {
-                  title: "What is Natural DS?",
-                  content: "A structured DS for docs.",
+                  title: "How do I customize the accent color?",
+                  content: H.span(
+                    "Find all instances of ",
+                    H.codeTag("#f97316"),
+                    " in the CSS and replace with your preferred color. Also update the hover state color ",
+                    H.codeTag("#ea580c"),
+                    " to a darker shade of your accent.",
+                  ),
                   icon: icons.chevronDown,
                   open: true,
                 },
                 {
-                  title: "How is CSS handled?",
-                  content: "Styles are component-scoped.",
+                  title: "Can I use this with React?",
+                  content: H.span(
+                    "Yes! The HTML structure and CSS classes can be directly used in JSX. Just convert ",
+                    H.codeTag("class"),
+                    " to ",
+                    H.codeTag("className"),
+                    " and add state management for interactive components.",
+                  ),
+                  icon: icons.chevronDown,
+                },
+                {
+                  title: "Is dark mode supported?",
+                  content: H.span(
+                    "The theme toggle button is included in the sidebar. To implement dark mode, add a ",
+                    H.codeTag(".dark"),
+                    " class to ",
+                    H.codeTag("<body>"),
+                    " and define CSS custom properties with dark values.",
+                  ),
                   icon: icons.chevronDown,
                 },
               ],
@@ -623,15 +734,46 @@ const pageHtml = (): string => {
           H.section(
             { id: "file-tree" },
             sectionHeading(ctx, { title: "File Tree", href: "#file-tree" }),
+            bodyText(ctx, {
+              content:
+                "File trees display directory structures with appropriate icons for folders and different file types. Nested items are connected with dashed lines.",
+            }),
             fileTree(ctx, {
               items: [
-                H.div({ class: "file-tree-item folder" }, "design-system"),
+                H.div(
+                  { class: "file-tree-item folder" },
+                  icons.folderIcon,
+                  "project-root",
+                ),
                 H.div(
                   { class: "file-tree-children" },
-                  H.div({ class: "file-tree-item file file-ts" }, "natural.ts"),
                   H.div(
-                    { class: "file-tree-item file file-css" },
-                    "natural.css",
+                    { class: "file-tree-item folder" },
+                    icons.folderIcon,
+                    "src",
+                  ),
+                  H.div(
+                    { class: "file-tree-children" },
+                    H.div(
+                      { class: "file-tree-item file file-ts" },
+                      icons.fileIcon,
+                      "index.ts",
+                    ),
+                    H.div(
+                      { class: "file-tree-item file file-css" },
+                      icons.fileIcon,
+                      "styles.css",
+                    ),
+                  ),
+                  H.div(
+                    { class: "file-tree-item file file-json" },
+                    icons.fileIcon,
+                    "package.json",
+                  ),
+                  H.div(
+                    { class: "file-tree-item file file-md" },
+                    icons.fileIcon,
+                    "README.md",
                   ),
                 ),
               ],
@@ -640,33 +782,68 @@ const pageHtml = (): string => {
           H.section(
             { id: "steps" },
             sectionHeading(ctx, { title: "Steps", href: "#steps" }),
+            bodyText(ctx, {
+              content:
+                "Steps show a numbered progression through a multi-step process. Each step has an indicator, connecting line, and content area.",
+            }),
             steps(ctx, {
               steps: [
                 {
-                  title: "Install",
-                  description: "Add Natural DS dependencies.",
+                  title: "Define the Structure",
+                  description:
+                    "Create the HTML markup using the documented class names.",
                 },
                 {
-                  title: "Compose",
-                  description: "Create layouts and regions.",
+                  title: "Apply Styling",
+                  description:
+                    "Copy the relevant CSS or include the full stylesheet.",
                 },
-                { title: "Render", description: "Serve the HTML output." },
+                {
+                  title: "Add Interactivity",
+                  description:
+                    "Implement JavaScript for interactive components like tabs and accordions.",
+                },
               ],
             }),
           ),
           H.section(
             { id: "tables" },
             sectionHeading(ctx, { title: "API Tables", href: "#tables" }),
+            bodyText(ctx, {
+              content:
+                "API tables display structured data like component props, configuration options, or function parameters with consistent styling.",
+            }),
             H.div(
               { id: "table-props" },
               subsectionHeading(ctx, { title: "Props Table" }),
             ),
             apiTable(ctx, {
-              head: ["Prop", "Type", "Default"],
+              head: ["Property", "Type", "Default", "Description"],
               rows: [
-                ["title", "string", "n/a"],
-                ["description", "string", "n/a"],
-                ["actions", "Content[]", "[]"],
+                [
+                  combineHast(
+                    H.span({ class: "prop-name" }, "variant"),
+                    H.span({ class: "prop-required" }, "required"),
+                  ),
+                  H.span({ class: "prop-type" }, '"default" | "info" | "tip"'),
+                  H.span({ class: "prop-default" }, "—"),
+                  "Visual style variant for the callout",
+                ],
+                [
+                  H.span({ class: "prop-name" }, "title"),
+                  H.span({ class: "prop-type" }, "string"),
+                  H.span({ class: "prop-default" }, "undefined"),
+                  "Header text displayed with icon",
+                ],
+                [
+                  combineHast(
+                    H.span({ class: "prop-name" }, "children"),
+                    H.span({ class: "prop-required" }, "required"),
+                  ),
+                  H.span({ class: "prop-type" }, "ReactNode"),
+                  H.span({ class: "prop-default" }, "—"),
+                  "Content to display inside the callout",
+                ],
               ],
             }),
             H.div(
@@ -684,19 +861,31 @@ const pageHtml = (): string => {
           H.section(
             { id: "badges" },
             sectionHeading(ctx, { title: "Badges", href: "#badges" }),
-            H.div(
-              badge(ctx, { label: "Default", variant: "default" }),
-              " ",
-              badge(ctx, { label: "Primary", variant: "primary" }),
-              " ",
-              badge(ctx, { label: "Success", variant: "success" }),
-              " ",
-              badge(ctx, { label: "Warning", variant: "warning" }),
-              " ",
-              badge(ctx, { label: "Error", variant: "error" }),
-              " ",
-              badge(ctx, { label: "Info", variant: "info" }),
-            ),
+            bodyText(ctx, {
+              content:
+                "Badges are small labels for status indicators, versions, categories, or tags. Six semantic variants are available.",
+            }),
+            exampleWrapper(ctx, {
+              label: "All Variants",
+              content: H.div(
+                { style: "display: flex; gap: 8px; flex-wrap: wrap" },
+                badge(ctx, { label: "Default", variant: "default" }),
+                badge(ctx, { label: "Primary", variant: "primary" }),
+                badge(ctx, { label: "Success", variant: "success" }),
+                badge(ctx, { label: "Warning", variant: "warning" }),
+                badge(ctx, { label: "Error", variant: "error" }),
+                badge(ctx, { label: "Info", variant: "info" }),
+              ),
+            }),
+            bodyText(ctx, {
+              content: combineHast(
+                H.span(
+                  "Use badges inline with text to highlight status: The API is ",
+                ),
+                badge(ctx, { label: "Stable", variant: "success" }),
+                H.span(" and ready for production use."),
+              ),
+            }),
           ),
           H.section(
             { id: "keyboard" },
@@ -704,15 +893,62 @@ const pageHtml = (): string => {
               title: "Keyboard Shortcuts",
               href: "#keyboard",
             }),
-            keyboardShortcut(ctx, { keys: ["Cmd", "K"] }),
+            bodyText(ctx, {
+              content:
+                "Display keyboard shortcuts with styled key indicators that mimic physical keys.",
+            }),
+            exampleWrapper(ctx, {
+              label: "Examples",
+              content: H.div(
+                { style: "display: flex; gap: 24px; flex-wrap: wrap" },
+                H.div(
+                  H.span(
+                    {
+                      style:
+                        "color: #737373; font-size: 13px; margin-right: 8px",
+                    },
+                    "Search:",
+                  ),
+                  keyboardShortcut(ctx, { keys: ["Cmd", "K"] }),
+                ),
+                H.div(
+                  H.span(
+                    {
+                      style:
+                        "color: #737373; font-size: 13px; margin-right: 8px",
+                    },
+                    "Save:",
+                  ),
+                  keyboardShortcut(ctx, { keys: ["Ctrl", "S"] }),
+                ),
+                H.div(
+                  H.span(
+                    {
+                      style:
+                        "color: #737373; font-size: 13px; margin-right: 8px",
+                    },
+                    "Copy:",
+                  ),
+                  keyboardShortcut(ctx, { keys: ["Cmd", "C"] }),
+                ),
+              ),
+            }),
           ),
           imageWithCaption(ctx, {
             src: "http://via.placeholder.com/960x320?text=Natural+DS",
             caption: "Reference preview image",
           }),
           footerNav(ctx, {
-            previous: { label: "Previous", title: "Spacing", href: "#spacing" },
-            next: { label: "Next", title: "Callouts", href: "#callouts" },
+            previous: {
+              label: "Previous",
+              title: "Introduction",
+              href: "#layout",
+            },
+            next: {
+              label: "Next",
+              title: "Customization",
+              href: "#callouts",
+            },
           }),
         ),
       toc: (ctx) =>
@@ -740,16 +976,36 @@ const pageHtml = (): string => {
             }),
             tocLink(ctx, { label: "Tabs", href: "#tabs" }),
             tocLink(ctx, { label: "Callouts", href: "#callouts" }),
-            tocLink(ctx, { label: "Default", href: "#callout-default", nested: true }),
-            tocLink(ctx, { label: "Info Variant", href: "#callout-info", nested: true }),
-            tocLink(ctx, { label: "Tip Variant", href: "#callout-tip", nested: true }),
+            tocLink(ctx, {
+              label: "Default",
+              href: "#callout-default",
+              nested: true,
+            }),
+            tocLink(ctx, {
+              label: "Info Variant",
+              href: "#callout-info",
+              nested: true,
+            }),
+            tocLink(ctx, {
+              label: "Tip Variant",
+              href: "#callout-tip",
+              nested: true,
+            }),
             tocLink(ctx, { label: "Feature Cards", href: "#cards" }),
             tocLink(ctx, { label: "Accordion", href: "#accordion" }),
             tocLink(ctx, { label: "File Tree", href: "#file-tree" }),
             tocLink(ctx, { label: "Steps", href: "#steps" }),
             tocLink(ctx, { label: "API Tables", href: "#tables" }),
-            tocLink(ctx, { label: "Props Table", href: "#table-props", nested: true }),
-            tocLink(ctx, { label: "Events Table", href: "#table-events", nested: true }),
+            tocLink(ctx, {
+              label: "Props Table",
+              href: "#table-props",
+              nested: true,
+            }),
+            tocLink(ctx, {
+              label: "Events Table",
+              href: "#table-events",
+              nested: true,
+            }),
             tocLink(ctx, { label: "Badges", href: "#badges" }),
             tocLink(ctx, { label: "Keyboard Shortcuts", href: "#keyboard" }),
           ],
