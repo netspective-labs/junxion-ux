@@ -8,6 +8,9 @@
     "@std/media-types": "jsr:@std/media-types@^1",
     "@std/assert": "jsr:@std/assert@1",
 
+    // Common helpers
+    "@zod": "jsr:@zod/zod@4",
+
     // Hypertext AST (HAST)
     "hast": "npm:@types/hast@^3",
     "hast-util-to-html": "npm:hast-util-to-html@^9",
