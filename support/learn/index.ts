@@ -13,6 +13,7 @@ type LearningResource = {
   path: string;
   entry: string;
   port: number;
+  teaches: string;
 };
 
 const resources = [
@@ -23,6 +24,8 @@ const resources = [
     path: "support/learn/01-hello/counter.ts",
     entry: "./01-hello/counter.ts",
     port: 7681,
+    teaches:
+      "ContinuUX counter example showing server-rendered Natural HTML, typed SSE pushes, shared state, and pico.css styling.",
   },
   {
     id: "counter-ce",
@@ -32,6 +35,8 @@ const resources = [
     path: "support/learn/01-hello/counter-ce.ts",
     entry: "./01-hello/counter-ce.ts",
     port: 8000,
+    teaches:
+      "Custom Element boundary powered by ContinuUX SSE/action endpoints and Natural HTML markup with a plain JS `<counter-ce>` module.",
   },
   {
     id: "dialog-live",
@@ -40,6 +45,8 @@ const resources = [
     path: "support/learn/04-dialog/hello.ts",
     entry: "./04-dialog/hello.ts",
     port: 7744,
+    teaches:
+      "Natural Dialog form with zod validation, ContinuUX CX helpers, live SSE validation messages, and inline submission summary.",
   },
   {
     id: "markdown",
@@ -48,6 +55,8 @@ const resources = [
     path: "support/learn/01-hello/markdown.ts",
     entry: "./01-hello/markdown.ts",
     port: 7690,
+    teaches:
+      "ContinuUX routing + autoTsJsBundler delivering TypeScript client code that renders markdown via remark in the browser.",
   },
   {
     id: "starter-ds",
@@ -56,6 +65,8 @@ const resources = [
     path: "support/learn/02-starter-ds/starter-ds.ts",
     entry: "./02-starter-ds/starter-ds.ts",
     port: 7665,
+    teaches:
+      "Starter Design System page that wraps the markdown demo in `starterDesignSystem`, head slots, and Starter DS layout helpers.",
   },
   {
     id: "hello",
@@ -64,6 +75,8 @@ const resources = [
     path: "support/learn/03-natural-ds/hello.ts",
     entry: "./03-natural-ds/hello.ts",
     port: 7331,
+    teaches:
+      "Minimal Natural DS layout showing breadcrumbs, sidebar, and content sections without extra chrome.",
   },
   {
     id: "hello-fancy",
@@ -72,6 +85,8 @@ const resources = [
     path: "support/learn/03-natural-ds/hello-fancy.ts",
     entry: "./03-natural-ds/hello-fancy.ts",
     port: 7456,
+    teaches:
+      "Natural DS context header, navigation, search, TOC, and markdown rendering powered by ContinuUX client bundling.",
   },
   {
     id: "guide",
@@ -80,6 +95,8 @@ const resources = [
     path: "support/learn/03-natural-ds/guide.ts",
     entry: "./03-natural-ds/guide.ts",
     port: 7599,
+    teaches:
+      "Comprehensive Natural DS reference mirroring `lib/natural-ds`, showcasing accordions, cards, grids, nav components, and more.",
   },
 ] satisfies LearningResource[];
 
@@ -98,12 +115,13 @@ const defaultRunArgs = [
 ];
 
 const clientResources = resources.map(
-  ({ id, name, description, path, port }) => ({
+  ({ id, name, description, path, port, teaches }) => ({
     id,
     name,
     description,
     path,
     port,
+    teaches,
   }),
 );
 
@@ -236,21 +254,128 @@ const blankFrameHtml = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Learning Resource</title>
+    <title>Learning Resources</title>
     <style>
+      :root {
+        color: #0f1115;
+        background: #f7f7fa;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+      }
       body {
         margin: 0;
-        background: #f2f3f6;
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-        color: #3a3f4b;
-        display: grid;
-        place-items: center;
-        height: 100vh;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #ffffff, #f0f1f6 60%);
+        color: #1c1f2a;
+      }
+      main {
+        padding: 2rem clamp(1rem, 4vw, 3.5rem);
+        max-width: 960px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.6rem, 3vw, 2.25rem);
+      }
+      h2 {
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: 0.01em;
+      }
+      .intro,
+      .instructions {
+        background: #fff;
+        border-radius: 18px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(15, 17, 21, 0.08);
+        border: 1px solid #e0e3ec;
+      }
+      ol {
+        margin: 0;
+        padding: 0 0 0 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        list-style: decimal;
+      }
+      li {
+        background: #fff;
+        padding: 1rem 1.25rem;
+        border-radius: 12px;
+        border: 1px solid #d8dce8;
+        box-shadow: 0 8px 20px rgba(15, 17, 21, 0.05);
+      }
+      .teaches {
+        margin: 0.35rem 0;
+        font-style: italic;
+        color: #4a5060;
+      }
+      .meta {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #6b7284;
+      }
+      @media (max-width: 640px) {
+        ol {
+          padding-left: 0.9rem;
+        }
       }
     </style>
   </head>
   <body>
-    <p>Select a resource above.</p>
+    <main>
+      <section class="intro">
+        <h1>Learning Resources Server</h1>
+        <p>
+          This page is the Junxion UX learning hub that catalogs ContinuUX,
+          Natural HTML, and Natural DS samples. Selecting a resource from the
+          dropdown above spins up its Deno command, proxies the port, and loads
+          the experience into this frame so you can see how each part of the
+          repo works together.
+        </p>
+        <p id="serverStatus">Waiting for selection…</p>
+      </section>
+
+      <section>
+        <h2>Available Learning Resources</h2>
+        <ol id="resourceList"></ol>
+      </section>
+
+      <section class="instructions">
+        <p>
+          Each entry highlights a facet of the Junxion UX repo:
+          ContinuUX interaction schemata, Natural HTML markup helpers, Natural
+          DS layouts, or Continuux-backed helpers like \`autoTsJsBundler\`.
+          Choose one to “run” it—this frame will display the live page once
+          the Learning Resources Server finishes starting the example.
+        </p>
+      </section>
+    </main>
+    <script type="module">
+      const resources = ${JSON.stringify(clientResources)};
+      const list = document.getElementById("resourceList");
+      const status = document.getElementById("serverStatus");
+      if (status) {
+        status.textContent = "Learning Resources Server running on http://localhost:${indexPort}/";
+      }
+      for (const resource of resources) {
+        const li = document.createElement("li");
+        const title = document.createElement("strong");
+        title.textContent = resource.name;
+        const desc = document.createElement("p");
+        desc.textContent = resource.description;
+        const teaches = document.createElement("p");
+        teaches.textContent = resource.teaches;
+        teaches.className = "teaches";
+        const meta = document.createElement("p");
+        meta.textContent = \`\${resource.path} · port \${resource.port}\`;
+        meta.className = "meta";
+        li.append(title, desc, teaches, meta);
+        list?.appendChild(li);
+      }
+    </script>
   </body>
 </html>`;
 
