@@ -238,37 +238,40 @@ export const breadcrumbs = defineComponent<
   },
 );
 
-export type DocNavSubject<Id extends string = string> = {
+export type NavigationSubject<Id extends string = string> = {
   readonly id: Id;
   readonly label: string;
   readonly href?: string;
 };
 
-export type DocNavItem = {
+export type NavigationItem = {
   readonly label: string;
   readonly href?: string;
   readonly active?: boolean;
-  readonly children?: readonly DocNavItem[];
+  readonly children?: readonly NavigationItem[];
 };
 
-export type DocNavTrees<Id extends string = string> = Readonly<
-  Record<Id, readonly DocNavItem[]>
+export type NavigationTrees<Id extends string = string> = Readonly<
+  Record<Id, readonly NavigationItem[]>
 >;
 
-export type DocSubjectSelectProps<Id extends string = string> = {
-  readonly subjects: readonly DocNavSubject<Id>[];
+export type NavigationSubjectSelectProps<Id extends string = string> = {
+  readonly subjects: readonly NavigationSubject<Id>[];
   readonly activeSubjectId?: Id;
   readonly label?: string;
   readonly class?: string;
   readonly selectId?: string;
 };
 
-export const docSubjectSelect = defineComponent<
-  DocSubjectSelectProps<Any>,
+export const navSubjectSelect = defineComponent<
+  NavigationSubjectSelectProps<Any>,
   Any,
   NamingStrategy
->("DocSubjectSelect", (ctx, props) => {
-  const elementId = ctx.naming.elemIdValue("DocSubjectSelect", "component");
+>("NavigationSubjectSelect", (ctx, props) => {
+  const elementId = ctx.naming.elemIdValue(
+    "NavigationSubjectSelect",
+    "component",
+  );
   const elementIdAttr = ctx.naming.elemDataAttr(
     "element-id",
     elementId,
@@ -279,19 +282,19 @@ export const docSubjectSelect = defineComponent<
 
   return h.div(
     {
-      class: ctx.cls("doc-subject", props.class),
+      class: ctx.cls("navigation-subject", props.class),
       [elementIdAttr]: elementId,
     },
     props.label
       ? h.label(
-        { class: ctx.cls("doc-subject__label"), for: selectId },
+        { class: ctx.cls("navigation-subject__label"), for: selectId },
         props.label,
       )
       : null,
     h.select(
       {
         id: selectId,
-        class: ctx.cls("doc-subject__select"),
+        class: ctx.cls("navigation-subject__select"),
         "data-active-subject": activeId ?? "",
       },
       h.each(props.subjects, (subject) =>
@@ -307,16 +310,20 @@ export const docSubjectSelect = defineComponent<
   );
 });
 
-export type DocNavTreeProps = {
-  readonly items: readonly DocNavItem[];
+export type NavigationTreeProps = {
+  readonly items: readonly NavigationItem[];
   readonly label?: string;
   readonly class?: string;
 };
 
-export const docNavTree = defineComponent<DocNavTreeProps, Any, NamingStrategy>(
-  "DocNavTree",
+export const navigationTree = defineComponent<
+  NavigationTreeProps,
+  Any,
+  NamingStrategy
+>(
+  "NavigationTree",
   (ctx, props) => {
-    const elementId = ctx.naming.elemIdValue("DocNavTree", "component");
+    const elementId = ctx.naming.elemIdValue("NavigationTree", "component");
     const elementIdAttr = ctx.naming.elemDataAttr(
       "element-id",
       elementId,
@@ -324,26 +331,26 @@ export const docNavTree = defineComponent<DocNavTreeProps, Any, NamingStrategy>(
     );
 
     const renderItems = (
-      items: readonly DocNavItem[],
+      items: readonly NavigationItem[],
       depth: number,
     ): h.RawHtml =>
       h.ul(
         {
-          class: ctx.cls("doc-tree__list", `doc-tree__list--d${depth}`),
+          class: ctx.cls("nav-tree__list", `nav-tree__list--d${depth}`),
         },
         h.each(items, (item) =>
           h.li(
             {
-              class: ctx.cls("doc-tree__item", {
-                "doc-tree__item--active": !!item.active,
+              class: ctx.cls("nav-tree__item", {
+                "nav-tree__item--active": !!item.active,
               }),
             },
             item.href
               ? h.a(
-                { href: item.href, class: ctx.cls("doc-tree__link") },
+                { href: item.href, class: ctx.cls("nav-tree__link") },
                 item.label,
               )
-              : h.span({ class: ctx.cls("doc-tree__label") }, item.label),
+              : h.span({ class: ctx.cls("nav-tree__label") }, item.label),
             item.children && item.children.length > 0
               ? renderItems(item.children, depth + 1)
               : null,
@@ -352,7 +359,7 @@ export const docNavTree = defineComponent<DocNavTreeProps, Any, NamingStrategy>(
 
     return h.nav(
       {
-        class: ctx.cls("doc-tree", props.class),
+        class: ctx.cls("nav-tree", props.class),
         "aria-label": props.label ?? "Sections",
         [elementIdAttr]: elementId,
       },
@@ -361,9 +368,9 @@ export const docNavTree = defineComponent<DocNavTreeProps, Any, NamingStrategy>(
   },
 );
 
-export function selectDocNavTree<Id extends string>(
-  trees: DocNavTrees<Id>,
+export function selectNavigationTree<Id extends string>(
+  trees: NavigationTrees<Id>,
   activeSubjectId: Id,
-): readonly DocNavItem[] {
+): readonly NavigationItem[] {
   return trees[activeSubjectId] ?? [];
 }
