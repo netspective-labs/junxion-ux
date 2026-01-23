@@ -109,6 +109,63 @@ of Continuux itself.
   dependencies (CSS and JS) so design systems can ship a cohesive visual
   framework without external CSS libraries.
 
+#### Dialog system (`dialog.ts`, `dialog-zod.ts`, `dialog-lform.ts`)
+
+Junxion UX includes a schema-driven dialog and form infrastructure built on
+Natural HTML and Zod.
+
+At its core, dialogs are projections of schemas. A dialog is defined against a
+Zod object schema, and every field, value, and validation rule flows directly
+from that contract. There is no parallel “form model” to keep in sync.
+
+* `dialog.ts`
+  The foundational dialog builder. It provides a fluent API for composing
+  `<dialog>` and `<form>` structures using Natural HTML primitives.
+
+  Capabilities include:
+
+  * Type-safe field registration derived from Zod schemas
+  * Built-in renderers for inputs, textareas, checkboxes, and selects
+  * Deterministic wiring of labels, descriptions, errors, ARIA attributes, and IDs
+  * Modal or inline rendering modes
+  * Integrated dialog CSS, scripts, and UA dependencies
+  * Pure server-side rendering with no DOM dependency
+
+  Dialogs expose explicit methods such as `render()` and `headTags()` so HTML
+  emission and required assets remain inspectable and testable.
+
+* `dialog-zod.ts`
+  A schema-centric convenience layer that allows dialog metadata to live
+  alongside the Zod schema itself.
+
+  This module lets you attach UI metadata to schemas and fields using Zod’s
+  `.meta()` mechanism:
+
+  * Field labels, descriptions, placeholders, renderers, and wrappers
+  * Dialog-level defaults such as titles, submit/cancel labels, field ordering,
+    default data, and attributes
+
+  From an annotated schema, dialogs can be generated automatically with
+  deterministic merging of schema defaults and per-render overrides. The schema
+  becomes the single source of truth for data shape, validation, and default UI
+  projection.
+
+* `dialog-lform.ts`
+  An interoperability adapter that converts LHC-Forms style questionnaire JSON
+  into Natural HTML dialogs.
+
+  It:
+
+  * Loads questionnaires from local files or remote URLs
+  * Flattens nested group items into a stable field order
+  * Infers Zod schema types and dialog field renderers from item definitions
+  * Maps answer options to selects and initial values to default form data
+  * Produces a fully functional `Dialog` instance
+
+  This allows external, declarative questionnaire formats to be rendered as
+  deterministic, server-rendered HTML forms without introducing a client-side
+  framework.
+
 ### `lib/continuux`
 
 The hypermedia interaction layer. This is where server and browser “know” how to
