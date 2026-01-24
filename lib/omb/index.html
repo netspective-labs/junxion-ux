@@ -247,8 +247,17 @@
 <body>
   <header>
     <div class="title">Object Model Builder (OMB) Playground</div>
-    <button id="rebuildBtn" type="button">Rebuild</button>
+
+    <div style="display:flex; align-items:center; gap:12px;">
+      <label style="display:flex; align-items:center; gap:8px; font: inherit;">
+        <input id="toggleTags" type="checkbox" checked />
+        Show <code>.tag</code> meta data
+      </label>
+
+      <button id="rebuildBtn" type="button">Rebuild</button>
+    </div>
   </header>
+
 
   <main>
     <div class="pane left">
@@ -327,6 +336,7 @@
     const tabJson = /** @type {HTMLButtonElement} */ (document.querySelector("#tabJson"));
     const panelXml = document.querySelector("#panelXml");
     const panelJson = document.querySelector("#panelJson");
+    const toggleTags = /** @type {HTMLInputElement} */ (document.querySelector("#toggleTags"));
 
     function setTab(which) {
       const xmlActive = which === "xml";
@@ -374,7 +384,8 @@
 
     function renderJson() {
       const model = root.model ?? root.rebuild();
-      jsonViewer.data = JSON.parse(JSON.stringify(model));
+      const viewModel = model.toJSON({ withTags: toggleTags.checked });
+      jsonViewer.data = JSON.parse(JSON.stringify(viewModel));
       if (jsonViewer.collapseAll) jsonViewer.collapseAll();
       else if (jsonViewer.expandAll) jsonViewer.expandAll();
     }
@@ -390,6 +401,7 @@
     });
 
     rebuildBtn.addEventListener("click", () => root.rebuild());
+    toggleTags.addEventListener("change", renderJson);
 
     renderAll();
     queueMicrotask(renderAll);
