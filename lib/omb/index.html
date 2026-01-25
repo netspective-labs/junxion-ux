@@ -36,6 +36,9 @@
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/xml.min.js"
     ></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/javascript.min.js"
+    ></script>
 
     <script
       src="https://unpkg.com/@alenaksu/json-viewer@2.1.2/dist/json-viewer.bundle.js"
@@ -351,6 +354,9 @@
           <button id="tabJson" type="button" role="tab" aria-selected="false">
             Transformed JSON
           </button>
+          <button id="tabZod" type="button" role="tab" aria-selected="false">
+            Zod Schema
+          </button>
         </div>
 
         <div id="panelXml" class="tab-content active" role="tabpanel">
@@ -372,6 +378,15 @@
         <div id="panelJson" class="tab-content" role="tabpanel">
           <p class="hint">Sanitized OMB model (JSON.stringify / parse)</p>
           <json-viewer id="jsonViewer"></json-viewer>
+        </div>
+
+        <div id="panelZod" class="tab-content" role="tabpanel">
+          <p class="hint" style="display: flex; align-items: center; gap: 10px">
+            Generated JavaScript code from <code>toZodSchema(model)</code>
+            <button id="copyZodBtn" class="mini" type="button">Copy</button>
+            <span id="copyZodMsg" class="hint" style="margin-left: auto"></span>
+          </p>
+          <pre><code id="zodCode" class="language-javascript"></code></pre>
         </div>
       </div>
     </main>
@@ -429,6 +444,7 @@
         defaultTypedValue,
         ObjectModelBuilderElement,
       } from "./omb.js";
+      import { toZodSchema } from "./omb-zod.js";
 
       class MyElement extends ObjectModelBuilderElement {
         constructor() {
@@ -447,6 +463,8 @@
         /** @type {HTMLElement} */ (document.querySelector("#xmlCode"));
       const srcCode =
         /** @type {HTMLElement} */ (document.querySelector("#srcCode"));
+      const zodCode =
+        /** @type {HTMLElement} */ (document.querySelector("#zodCode"));
       const jsonViewer =
         /** @type {any} */ (document.querySelector("#jsonViewer"));
       const rebuildBtn =
@@ -466,9 +484,16 @@
         /** @type {HTMLButtonElement} */ (document.querySelector(
           "#tabJson",
         ));
+      const tabZod =
+        /** @type {HTMLButtonElement} */ (document.querySelector(
+          "#tabZod",
+        ));
+
       const panelXml = document.querySelector("#panelXml");
       const panelSrc = document.querySelector("#panelSrc");
       const panelJson = document.querySelector("#panelJson");
+      const panelZod = document.querySelector("#panelZod");
+
       const toggleTags =
         /** @type {HTMLInputElement} */ (document.querySelector(
           "#toggleTags",
@@ -498,6 +523,14 @@
         /** @type {HTMLButtonElement} */ (document.querySelector(
           "#clearSrcBtn",
         ));
+      const copyZodBtn =
+        /** @type {HTMLButtonElement} */ (document.querySelector(
+          "#copyZodBtn",
+        ));
+      const copyZodMsg =
+        /** @type {HTMLElement} */ (document.querySelector(
+          "#copyZodMsg",
+        ));
 
       /** @type {string | null} */
       let lastSourceXmlText = null;
@@ -523,23 +556,28 @@
         const xmlActive = which === "xml";
         const srcActive = which === "src";
         const jsonActive = which === "json";
+        const zodActive = which === "zod";
 
         tabXml.classList.toggle("active", xmlActive);
         tabSrc.classList.toggle("active", srcActive);
         tabJson.classList.toggle("active", jsonActive);
+        tabZod.classList.toggle("active", zodActive);
 
         tabXml.setAttribute("aria-selected", String(xmlActive));
         tabSrc.setAttribute("aria-selected", String(srcActive));
         tabJson.setAttribute("aria-selected", String(jsonActive));
+        tabZod.setAttribute("aria-selected", String(zodActive));
 
         panelXml?.classList.toggle("active", xmlActive);
         panelSrc?.classList.toggle("active", srcActive);
         panelJson?.classList.toggle("active", jsonActive);
+        panelZod?.classList.toggle("active", zodActive);
       }
 
       tabXml.addEventListener("click", () => setTab("xml"));
       tabSrc.addEventListener("click", () => setTab("src"));
       tabJson.addEventListener("click", () => setTab("json"));
+      tabZod.addEventListener("click", () => setTab("zod"));
 
       function formatXml(xml) {
         const reg = /(>)(<)(\/*)/g;
@@ -564,7 +602,7 @@
           .join("\n");
       }
 
-      function highlightXml(codeEl) {
+      function highlightCode(codeEl) {
         if (codeEl.dataset) delete codeEl.dataset.highlighted;
         const doHighlight = () => {
           if (window.hljs && window.hljs.highlightElement) {
@@ -592,7 +630,7 @@
       function renderXml() {
         const raw = new XMLSerializer().serializeToString(root);
         xmlCode.textContent = formatXml(raw);
-        highlightXml(xmlCode);
+        highlightCode(xmlCode);
       }
 
       function renderSourceXml() {
@@ -608,7 +646,7 @@
           lastSourceXmlText.length > 0
         ) {
           srcCode.textContent = formatXml(lastSourceXmlText);
-          highlightXml(srcCode);
+          highlightCode(srcCode);
           return;
         }
 
@@ -626,7 +664,7 @@
               String(e)
             } -->`;
           }
-          highlightXml(srcCode);
+          highlightCode(srcCode);
         })();
       }
 
@@ -675,10 +713,84 @@
         }
       }
 
+      function renderZodFromModel(model) {
+        try {
+          zodCode.textContent = toZodSchema(model);
+        } catch (e) {
+          zodCode.textContent = `// unable to generate schema\n// ${
+            String(e?.message ?? e)
+          }`;
+        }
+        highlightCode(zodCode);
+      }
+
+      function renderZodError(err) {
+        zodCode.textContent = `// omb:error (schema unavailable)\n// ${
+          String(err?.message ?? err)
+        }\n`;
+        highlightCode(zodCode);
+      }
+
+      function renderZod() {
+        const src = (root.getAttribute("omb:src") ?? "").trim();
+
+        if (src.length > 0) {
+          if (lastOmbError) {
+            renderZodError(lastOmbError);
+            return;
+          }
+          if (root.model) {
+            renderZodFromModel(root.model);
+            return;
+          }
+          zodCode.textContent =
+            `// Waiting for omb:built or omb:error…\n`;
+          highlightCode(zodCode);
+          return;
+        }
+
+        try {
+          const model = factory.buildFromDomRoot(root, { host: root });
+          renderZodFromModel(model);
+        } catch (e) {
+          renderZodError(e);
+        }
+      }
+
+      async function copyTextToClipboard(text) {
+        const s = String(text ?? "");
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(s);
+          return;
+        }
+        const ta = document.createElement("textarea");
+        ta.value = s;
+        ta.setAttribute("readonly", "true");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+
+      copyZodBtn.addEventListener("click", async () => {
+        try {
+          await copyTextToClipboard(zodCode.textContent || "");
+          copyZodMsg.textContent = "Copied";
+          setTimeout(() => (copyZodMsg.textContent = ""), 900);
+        } catch (e) {
+          copyZodMsg.textContent = "Copy failed";
+          setTimeout(() => (copyZodMsg.textContent = ""), 1200);
+          console.error(e);
+        }
+      });
+
       function renderAll() {
         renderXml();
         renderSourceXml();
         renderJson();
+        renderZod();
       }
 
       async function applySourceSelection() {
@@ -767,12 +879,12 @@
             srcCode.textContent.trim().length === 0)
         ) {
           srcCode.textContent = `<!-- omb:error: ${String(err)} -->`;
-          highlightXml(srcCode);
+          highlightCode(srcCode);
         }
       });
 
       rebuildBtn.addEventListener("click", () => void root.rebuild());
-      toggleTags.addEventListener("change", renderJson);
+      toggleTags.addEventListener("change", renderAll);
 
       applySrcBtn.addEventListener(
         "click",

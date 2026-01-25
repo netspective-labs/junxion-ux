@@ -1,27 +1,24 @@
-// omb_test.ts
+// mod_test.ts
 //
 // CI/CD regression intent
-// - index.html is the visual regression surface (human-friendly).
-// - This Playwright test is the server-side regression:
-//   it loads index.html in a real browser, extracts the OMB model JSON,
-//   and deep-compares it to a golden JSON object.
-// - Comparison is structural (objects), not string-based.
+// - Minimal deterministic Playwright regression.
+// - Serve a blank HTML, then in page.evaluate():
+//    - dynamic import ./omb.js
+//    - fetch fixture XML
+//    - build model from XML string
+//    - return model JSON
+// - Compare structural JSON to GOLDEN.
 //
 // Golden workflow
 // - Golden lives in `GOLDEN` constant at the end of this file.
 // - To re-generate it, this creates it at ./mod_test.golden.json:
-//     UPDATE_GOLDEN=1 deno test -A omb_test.ts
+//     UPDATE_GOLDEN=1 deno test -A mod_test.ts
 // - In CI/CD, do NOT set UPDATE_GOLDEN; drift fails the test.
 //
 // Typechecking note
 // - Deno tests do not include DOM lib typings by default, so even mentioning
 //   `document` in TypeScript causes type errors.
-// - We keep all browser DOM references inside string evals.
-//
-// Robustness note
-// - If mod_test.golden.json accidentally contains the literal text "undefined",
-//   this test will treat it as missing/invalid and regenerate it only when
-//   UPDATE_GOLDEN=1 is set.
+// - Keep all browser DOM references inside the page.evaluate string.
 
 import { assertEquals } from "@std/assert";
 import { dirname, fromFileUrl, join } from "@std/path";
@@ -37,13 +34,15 @@ async function writeGolden(path: string, value: unknown) {
 function contentTypeFor(pathname: string): string {
   if (pathname.endsWith(".html")) return "text/html; charset=utf-8";
   if (pathname.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (pathname.endsWith(".mjs")) return "text/javascript; charset=utf-8";
   if (pathname.endsWith(".md")) return "text/markdown; charset=utf-8";
   if (pathname.endsWith(".css")) return "text/css; charset=utf-8";
   if (pathname.endsWith(".json")) return "application/json; charset=utf-8";
+  if (pathname.endsWith(".xml")) return "application/xml; charset=utf-8";
   return "application/octet-stream";
 }
 
-function startSingleFileServer(allowPaths: Record<string, string>) {
+function startTestServer(allowPaths: Record<string, string>, html: string) {
   const controller = new AbortController();
 
   const server = Deno.serve(
@@ -55,6 +54,16 @@ function startSingleFileServer(allowPaths: Record<string, string>) {
     },
     async (req) => {
       const url = new URL(req.url);
+
+      if (url.pathname === "/" || url.pathname === "/test.html") {
+        return new Response(html, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+          },
+        });
+      }
+
       const mapped = allowPaths[url.pathname];
       if (!mapped) return new Response("Not Found", { status: 404 });
 
@@ -76,68 +85,108 @@ function startSingleFileServer(allowPaths: Record<string, string>) {
   return { origin, close: () => controller.abort() };
 }
 
-const WAIT_FOR_OMB_READY_JS = `
-  () => {
-    const el = document.querySelector("#ombRoot");
-    if (!el) return false;
-    return typeof el.model === "object" || typeof el.rebuild === "function";
+const BLANK_HTML = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OMB Test</title>
+  </head>
+  <body>This is an empty body, we're only going to run JavaScript.</body>
+</html>
+`;
+
+async function readGolden(path: string): Promise<unknown | undefined> {
+  try {
+    const txt = await Deno.readTextFile(path);
+    if (!txt || txt.includes("undefined")) return undefined;
+    return JSON.parse(txt);
+  } catch {
+    return undefined;
   }
-`;
-
-const EXTRACT_OMB_JSON_JS = `
-  (() => {
-    const el = document.querySelector("#ombRoot");
-    if (!el) throw new Error("ombRoot not found");
-
-    const model = el.model ?? (typeof el.rebuild === "function" ? el.rebuild() : null);
-    if (!model || typeof model.toJSON !== "function") {
-      throw new Error("OMB model not available");
-    }
-
-    const view = model.toJSON({ withTags: true });
-    const pure = JSON.parse(JSON.stringify(view));
-    if (pure === undefined) throw new Error("extracted JSON was undefined");
-    return pure;
-  })()
-`;
+}
 
 Deno.test(
-  "OMB golden regression: index.html model JSON deep-equals mod_test.golden.json",
+  "OMB golden regression: fixture model JSON deep-equals mod_test.golden.json",
   async () => {
     const here = dirname(fromFileUrl(import.meta.url));
-    const indexPath = join(here, "index.html");
+
     const ombPath = join(here, "omb.js");
-    const readmePath = join(here, "README.md");
+    const fixturePath = join(here, "fixtures", "fixture-01.xml");
     const goldenPath = join(here, "mod_test.golden.json");
 
-    const { origin, close } = startSingleFileServer({
-      "/": indexPath,
-      "/index.html": indexPath,
-      "/omb.js": ombPath,
-      "/README.md": readmePath,
-    });
+    const { origin, close } = startTestServer(
+      {
+        "/omb.js": ombPath,
+        "/fixtures/fixture-01.xml": fixturePath,
+      },
+      BLANK_HTML,
+    );
 
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
+    page.on("console", (m) => console.log("[browser]", m.type(), m.text()));
+    page.on("pageerror", (e) => console.log("[pageerror]", String(e)));
+    page.on(
+      "requestfailed",
+      (r) =>
+        console.log(
+          "[requestfailed]",
+          r.method(),
+          r.url(),
+          r.failure()?.errorText,
+        ),
+    );
+
     try {
-      await page.goto(`${origin}/index.html`, {
-        waitUntil: "domcontentloaded",
+      await page.goto(`${origin}/test.html`, { waitUntil: "domcontentloaded" });
+
+      const actual = await page.evaluate(async () => {
+        // deno-lint-ignore no-explicit-any
+        const doc = (globalThis as unknown as { document: any }).document;
+        if (!doc?.documentElement) {
+          throw new Error("no document in page context");
+        }
+
+        // if you get "Unable to load a local module" error, ignore it
+        const mod = await import("/omb.js");
+        // deno-lint-ignore no-explicit-any
+        const { createOmbBuilder } = mod as any;
+
+        const r = await fetch("/fixtures/fixture-01.xml", {
+          headers: { Accept: "application/xml,text/xml,*/*" },
+        });
+        if (!r.ok) {
+          throw new Error(
+            `fixture fetch failed (${r.status}): ${r.statusText}`,
+          );
+        }
+        const xml = await r.text();
+
+        const builder = createOmbBuilder();
+        const model = builder.buildFromXmlString(xml, {
+          host: doc.documentElement,
+        });
+
+        return JSON.parse(JSON.stringify(model.toJSON({ withTags: true })));
       });
-      await page.waitForFunction(WAIT_FOR_OMB_READY_JS);
 
-      const actual = await page.evaluate(EXTRACT_OMB_JSON_JS);
-      if (actual === undefined) {
-        throw new Error("Playwright returned undefined JSON");
-      }
       const updateGolden = (Deno.env.get("UPDATE_GOLDEN") ?? "").trim() === "1";
-
       if (updateGolden) {
         await writeGolden(goldenPath, actual);
         return;
       }
 
-      assertEquals(actual, GOLDEN);
+      const golden = await readGolden(goldenPath);
+
+      if (golden === undefined) {
+        throw new Error(
+          "Golden file missing or invalid. Re-run with UPDATE_GOLDEN=1 to generate it.",
+        );
+      }
+
+      assertEquals(actual, golden);
     } finally {
       await page.close().catch(() => {});
       await browser.close().catch(() => {});
@@ -145,329 +194,3 @@ Deno.test(
     }
   },
 );
-
-const GOLDEN = {
-  ".tag": {
-    "tagName": "my-element",
-    "tagToken": "myElement",
-    "attrs": {
-      "id": "ombRoot",
-      "rootAttr1": "root-attr-1-text",
-      "xmlnsXdm": "http://www.netspective.org/Framework/Commons/XMLDataModel",
-      "testBoolean": "yes",
-      "pathSeparatorChar": ":",
-      "testByte": "96",
-      "testShort": "128",
-      "testLong": "1234567890",
-      "testFloat": "3.1415926535",
-      "testDouble": "3.1415926535897932384626433",
-      "testFile": "DataModelSchemaTest.xml",
-      "testStringArray": "item1, item2, item3",
-      "testStringList": "item1, item2, item3",
-    },
-    "content": [
-      "\n      PCDATA in root.\n\n      ",
-    ],
-  },
-  ".children": [
-    {
-      ".tag": {
-        "tagName": "xdm:include",
-        "tagToken": "xdmInclude",
-        "attrs": {
-          "file": "DataModelSchemaTest-include.xml",
-        },
-        "content": [],
-      },
-      ".children": [],
-      "file": "DataModelSchemaTest-include.xml",
-    },
-    {
-      ".tag": {
-        "tagName": "nested1",
-        "tagToken": "nested1",
-        "attrs": {
-          "text": "TestText1",
-          "integer": "1",
-          "boolean": "yes",
-        },
-        "content": [
-          "\n        PCDATA in nested1.\n\n        ",
-        ],
-      },
-      ".children": [
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "text": "TestText11",
-              "integer": "11",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "text": "TestText11",
-          "integer": 11,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "type": "type-C",
-              "text": "TestText12",
-              "integer": "12",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "type": "type-C",
-          "text": "TestText12",
-          "integer": 12,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "class":
-                "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-              "text": "CustomTestText12",
-              "integer": "122",
-              "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-              "bitThree": "on",
-              "bitTen": "on",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "class":
-            "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-          "text": "CustomTestText12",
-          "integer": 122,
-          "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-          "bitThree": true,
-          "bitTen": true,
-        },
-      ],
-      "text": "TestText1",
-      "integer": true,
-      "boolean": true,
-      "nested11": [
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "text": "TestText11",
-              "integer": "11",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "text": "TestText11",
-          "integer": 11,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "type": "type-C",
-              "text": "TestText12",
-              "integer": "12",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "type": "type-C",
-          "text": "TestText12",
-          "integer": 12,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "class":
-                "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-              "text": "CustomTestText12",
-              "integer": "122",
-              "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-              "bitThree": "on",
-              "bitTen": "on",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "class":
-            "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-          "text": "CustomTestText12",
-          "integer": 122,
-          "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-          "bitThree": true,
-          "bitTen": true,
-        },
-      ],
-    },
-  ],
-  "id": "ombRoot",
-  "rootAttr1": "root-attr-1-text",
-  "xmlnsXdm": "http://www.netspective.org/Framework/Commons/XMLDataModel",
-  "testBoolean": true,
-  "pathSeparatorChar": ":",
-  "testByte": 96,
-  "testShort": 128,
-  "testLong": 1234567890,
-  "testFloat": 3.1415926535,
-  "testDouble": 3.141592653589793,
-  "testFile": "DataModelSchemaTest.xml",
-  "testStringArray": ["item1", "item2", "item3"],
-  "testStringList": ["item1", "item2", "item3"],
-  "xdmInclude": [
-    {
-      ".tag": {
-        "tagName": "xdm:include",
-        "tagToken": "xdmInclude",
-        "attrs": {
-          "file": "DataModelSchemaTest-include.xml",
-        },
-        "content": [],
-      },
-      ".children": [],
-      "file": "DataModelSchemaTest-include.xml",
-    },
-  ],
-  "nested1": [
-    {
-      ".tag": {
-        "tagName": "nested1",
-        "tagToken": "nested1",
-        "attrs": {
-          "text": "TestText1",
-          "integer": "1",
-          "boolean": "yes",
-        },
-        "content": [
-          "\n        PCDATA in nested1.\n\n        ",
-        ],
-      },
-      ".children": [
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "text": "TestText11",
-              "integer": "11",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "text": "TestText11",
-          "integer": 11,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "type": "type-C",
-              "text": "TestText12",
-              "integer": "12",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "type": "type-C",
-          "text": "TestText12",
-          "integer": 12,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "class":
-                "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-              "text": "CustomTestText12",
-              "integer": "122",
-              "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-              "bitThree": "on",
-              "bitTen": "on",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "class":
-            "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-          "text": "CustomTestText12",
-          "integer": 122,
-          "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-          "bitThree": true,
-          "bitTen": true,
-        },
-      ],
-      "text": "TestText1",
-      "integer": true,
-      "boolean": true,
-      "nested11": [
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "text": "TestText11",
-              "integer": "11",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "text": "TestText11",
-          "integer": 11,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "type": "type-C",
-              "text": "TestText12",
-              "integer": "12",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "type": "type-C",
-          "text": "TestText12",
-          "integer": 12,
-        },
-        {
-          ".tag": {
-            "tagName": "nested11",
-            "tagToken": "nested11",
-            "attrs": {
-              "class":
-                "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-              "text": "CustomTestText12",
-              "integer": "122",
-              "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-              "bitThree": "on",
-              "bitTen": "on",
-            },
-            "content": [],
-          },
-          ".children": [],
-          "class":
-            "com.netspective.commons.xdm.DataModelSchemaTest$CustomNested11Test",
-          "text": "CustomTestText12",
-          "integer": 122,
-          "bitMask": "BIT_THREE | BIT_FIVE | BIT_EIGHT",
-          "bitThree": true,
-          "bitTen": true,
-        },
-      ],
-    },
-  ],
-};
