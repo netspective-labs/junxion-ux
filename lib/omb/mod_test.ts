@@ -20,7 +20,7 @@
 //   `document` in TypeScript causes type errors.
 // - Keep all browser DOM references inside the page.evaluate string.
 
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { dirname, fromFileUrl, join } from "@std/path";
 
 // deno-lint-ignore no-import-prefix
@@ -217,12 +217,10 @@ Deno.test(
           }
 
           const golden = await readGolden(c.goldenFsPath);
-          if (golden === undefined) {
-            throw new Error(
-              `Golden file missing or invalid for ${c.xmlName}: ${c.goldenName}. Re-run with UPDATE_GOLDEN=1 to generate it.`,
-            );
-          }
-
+          assert(
+            golden,
+            `Golden file missing or invalid for ${c.xmlName}: ${c.goldenName}. Re-run with UPDATE_GOLDEN=1 to generate it.`,
+          );
           assertEquals(actual, golden);
         });
       }
