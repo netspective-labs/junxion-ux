@@ -8,7 +8,7 @@
  * Then open:
  *   http://127.0.0.1:7599
  */
-import { Application } from "../../../lib/continuux/http.ts";
+import { Application, htmlResponse } from "../../../lib/continuux/http.ts";
 import {
   accordion,
   apiTable,
@@ -52,8 +52,16 @@ import {
   tocLink,
   tocList,
 } from "../../../lib/natural-ds/mod.ts";
+import type {
+  NamingStrategy,
+  RenderCtx,
+} from "../../../lib/natural-html/design-system.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
-import { combineHast, headSlots } from "../../../lib/natural-html/patterns.ts";
+import {
+  combineHast,
+  headSlots,
+  type RenderInput,
+} from "../../../lib/natural-html/patterns.ts";
 
 type State = Record<string, never>;
 type Vars = Record<string, never>;
@@ -132,40 +140,199 @@ const icons = {
   ),
 };
 
+type ContextNavTarget = "docs" | "github";
+
+type DsRenderCtx = RenderCtx<RenderInput, NamingStrategy>;
+
+const buildContextHeader = (ctx: DsRenderCtx, active: ContextNavTarget) =>
+  contextHeaderContent(ctx, {
+    brand: contextBrand(ctx, {
+      label: "Acme Inc",
+      iconText: "DS",
+    }),
+    nav: [
+      contextNavLink(ctx, {
+        label: "Docs",
+        icon: icons.docs,
+        href: "/",
+        active: active === "docs",
+      }),
+      contextNavLink(ctx, {
+        label: "GitHub",
+        icon: icons.github,
+        href: "/github",
+        active: active === "github",
+      }),
+      contextNavLink(ctx, { label: "Blog", icon: icons.globe }),
+      contextNavLink(ctx, { label: "Discord", icon: icons.chat }),
+    ],
+    actions: [
+      contextIconButton(ctx, { label: "Search", icon: icons.search }),
+      contextIconButton(ctx, {
+        label: "Notifications",
+        icon: icons.bell,
+        badge: true,
+      }),
+      contextIconButton(ctx, { label: "Settings", icon: icons.settings }),
+    ],
+    user: contextUser(ctx, {
+      initials: "JD",
+      name: "John Doe",
+      chevron: icons.chevronDown,
+    }),
+  });
+
+const renderBreadcrumbSeparator = () =>
+  H.span(
+    { class: "breadcrumb-separator", "aria-hidden": "true" },
+    icons.breadcrumbChevron,
+  );
+
+type GitHubSubjectId =
+  | "netspective"
+  | "netspective-labs"
+  | "programmablemd";
+
+type GitHubRepo = {
+  readonly name: string;
+  readonly slug: string;
+  readonly description: string;
+  readonly url: string;
+};
+
+type GitHubSubject = {
+  readonly id: GitHubSubjectId;
+  readonly title: string;
+  readonly org: string;
+  readonly description: string;
+  readonly icon: H.RawHtml;
+  readonly repos: readonly GitHubRepo[];
+};
+
+const gitHubSubjects: Record<GitHubSubjectId, GitHubSubject> = {
+  netspective: {
+    id: "netspective",
+    title: "Netspective",
+    org: "netspective",
+    description: "Core ContinuUX tooling and docs living under Netspective.",
+    icon: icons.docs,
+    repos: [
+      {
+        slug: "autarkic",
+        name: "Autarkic",
+        description:
+          "Deno UI shell combining Natural DS with ContinuUX patterns.",
+        url: "https://github.com/netspective/autarkic",
+      },
+      {
+        slug: "continuux",
+        name: "ContinuUX",
+        description: "Typed UI primitives and runtime for guided interfaces.",
+        url: "https://github.com/netspective/continuux",
+      },
+      {
+        slug: "natural-ds",
+        name: "Natural DS",
+        description: "The shared design system used throughout these docs.",
+        url: "https://github.com/netspective/natural-ds",
+      },
+    ],
+  },
+  "netspective-labs": {
+    id: "netspective-labs",
+    title: "Netspective Labs",
+    org: "netspective-labs",
+    description:
+      "Experimental labs and prototypes that push CI/CD and runtime tooling.",
+    icon: icons.grid,
+    repos: [
+      {
+        slug: "home-polyglot",
+        name: "Home Polyglot",
+        description: "Prototype data portal for multilingual smart homes.",
+        url: "https://github.com/netspective-labs/home-polyglot",
+      },
+      {
+        slug: "sql-aide",
+        name: "SQL Aide",
+        description: "CLI and UI helpers for managing schema migrations.",
+        url: "https://github.com/netspective-labs/sql-aide",
+      },
+      {
+        slug: "aide",
+        name: "Aide",
+        description: "Collection of shared helper libraries for automation.",
+        url: "https://github.com/netspective-labs/aide",
+      },
+    ],
+  },
+  programmablemd: {
+    id: "programmablemd",
+    title: "ProgrammableMD",
+    org: "programmablemd",
+    description:
+      "Healthcare data and workflow automations from ProgrammableMD.",
+    icon: icons.globe,
+    repos: [
+      {
+        slug: "spry",
+        name: "Spry",
+        description: "Behavioral health tracking platform UX.",
+        url: "https://github.com/programmablemd/spry",
+      },
+      {
+        slug: "assurance-prime",
+        name: "Assurance Prime",
+        description: "Decision support engine for value-based care teams.",
+        url: "https://github.com/programmablemd/assurance-prime",
+      },
+      {
+        slug: "sprybi",
+        name: "SpryBI",
+        description: "BI dashboards for ProgrammableMD care networks.",
+        url: "https://github.com/programmablemd/sprybi",
+      },
+    ],
+  },
+};
+
+const gitHubSubjectOrder: readonly GitHubSubjectId[] = [
+  "netspective",
+  "netspective-labs",
+  "programmablemd",
+];
+
+const defaultGitHubSubjectId: GitHubSubjectId = "netspective";
+
+const getGitHubSubject = (id?: string): GitHubSubject =>
+  gitHubSubjects[
+    (id && id in gitHubSubjects
+      ? id
+      : defaultGitHubSubjectId) as GitHubSubjectId
+  ];
+
+const getGitHubRepo = (
+  subject: GitHubSubject,
+  slug?: string,
+): GitHubRepo =>
+  subject.repos.find((repo) => repo.slug === slug) ?? subject.repos[0];
+
+const buildGitHubHeadSlots = (subject: GitHubSubject) =>
+  headSlots({
+    title: `GitHub Explorer — ${subject.title}`,
+    meta: [
+      H.meta({ charset: "utf-8" }),
+      H.meta({
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
+      }),
+    ],
+  });
+
 const pageHtml = (): string => {
   const page = ds.page("NaturalDoc", {}, {
     slots: {
-      contextHeader: (ctx) =>
-        contextHeaderContent(ctx, {
-          brand: contextBrand(ctx, {
-            label: "Acme Inc",
-            iconText: "DS",
-          }),
-          nav: [
-            contextNavLink(ctx, {
-              label: "Docs",
-              icon: icons.docs,
-              active: true,
-            }),
-            contextNavLink(ctx, { label: "GitHub", icon: icons.github }),
-            contextNavLink(ctx, { label: "Blog", icon: icons.globe }),
-            contextNavLink(ctx, { label: "Discord", icon: icons.chat }),
-          ],
-          actions: [
-            contextIconButton(ctx, { label: "Search", icon: icons.search }),
-            contextIconButton(ctx, {
-              label: "Notifications",
-              icon: icons.bell,
-              badge: true,
-            }),
-            contextIconButton(ctx, { label: "Settings", icon: icons.settings }),
-          ],
-          user: contextUser(ctx, {
-            initials: "JD",
-            name: "John Doe",
-            chevron: icons.chevronDown,
-          }),
-        }),
+      contextHeader: (ctx) => buildContextHeader(ctx, "docs"),
       sidebar: (ctx) =>
         H.div(
           sidebarHeader(ctx, {
@@ -1014,15 +1181,166 @@ const pageHtml = (): string => {
   return H.render(page);
 };
 
+const renderGitHubSidebar = (
+  ctx: DsRenderCtx,
+  subject: GitHubSubject,
+  activeRepo: GitHubRepo,
+) =>
+  H.div(
+    sidebarHeader(ctx, {
+      label: "GitHub Explorer",
+      iconText: "GH",
+      toggleIcon: icons.toggle,
+    }),
+    subjectSelector(ctx, {
+      name: subject.title,
+      icon: subject.icon,
+      chevron: icons.chevronsUpDown,
+      triggerId: "subject-trigger",
+      popupId: "subject-popup",
+      options: gitHubSubjectOrder.map((subjectId) =>
+        H.a(
+          {
+            href: `/github/${subjectId}`,
+            style: "display:block;text-decoration:none;color:inherit;",
+          },
+          subjectOption(ctx, {
+            title: gitHubSubjects[subjectId].title,
+            description: gitHubSubjects[subjectId].description,
+            icon: gitHubSubjects[subjectId].icon,
+            checkmark: icons.check,
+            value: subjectId,
+            selected: subjectId === subject.id,
+          }),
+        )
+      ),
+    }),
+    navSection(ctx, {
+      children: [
+        navCategory(ctx, { label: "Repositories" }),
+        ...subject.repos.map((repo) =>
+          navLink(ctx, {
+            label: repo.name,
+            href: `/github/${subject.id}/${repo.slug}`,
+            icon: icons.navIcon,
+            active: repo.slug === activeRepo.slug,
+          })
+        ),
+      ],
+    }),
+  );
+
+const renderGitHubBreadcrumbs = (
+  ctx: DsRenderCtx,
+  subject: GitHubSubject,
+  repo: GitHubRepo,
+) =>
+  combineHast(
+    breadcrumbItem(ctx, { href: "/", icon: icons.home, home: true }),
+    renderBreadcrumbSeparator(),
+    breadcrumbItem(ctx, { label: "GitHub Explorer", href: "/github" }),
+    renderBreadcrumbSeparator(),
+    breadcrumbItem(ctx, {
+      label: subject.title,
+      href: `/github/${subject.id}`,
+    }),
+    renderBreadcrumbSeparator(),
+    breadcrumbItem(ctx, { label: repo.name, current: true }),
+  );
+
+const renderGitHubContent = (
+  ctx: DsRenderCtx,
+  subject: GitHubSubject,
+  repo: GitHubRepo,
+) =>
+  H.div(
+    pageHeader(ctx, {
+      title: "GitHub Explorer",
+      description:
+        "Browse the latest repositories from each organization without leaving the Natural DS shell.",
+    }),
+    callout(ctx, {
+      title: `${subject.title} • ${subject.org}`,
+      icon: icons.github,
+      variant: "info",
+      content: H.div(
+        H.p(subject.description),
+        H.p(
+          H.span("Viewing: "),
+          H.strong(repo.name),
+          " — ",
+          repo.description,
+        ),
+        H.p(
+          H.a(
+            {
+              href: repo.url,
+              target: "_blank",
+              rel: "noreferrer",
+            },
+            "Open on GitHub",
+          ),
+        ),
+      ),
+    }),
+    bodyText(ctx, {
+      content:
+        "Switch subjects or repositories from the sidebar to update the embedded preview.",
+    }),
+    H.section(
+      {
+        class: "github-iframe",
+        style:
+          "margin-top: 24px; background:#ffffff; border-radius:12px; box-shadow:0 12px 40px rgba(15,23,42,0.15);",
+      },
+      H.iframe({
+        src: repo.url,
+        title: `${repo.name} repository`,
+        style:
+          "width: 100%; min-height: 640px; border: 1px solid #e5e5e5; border-radius: 12px;",
+        loading: "lazy",
+        referrerpolicy: "no-referrer",
+      }),
+    ),
+  );
+
+const gitHubPageHtml = (subject: GitHubSubject, repo: GitHubRepo): string => {
+  const page = ds.page("NaturalDoc", {}, {
+    slots: {
+      contextHeader: (ctx) => buildContextHeader(ctx, "github"),
+      sidebar: (ctx) => renderGitHubSidebar(ctx, subject, repo),
+      breadcrumbs: (ctx) => renderGitHubBreadcrumbs(ctx, subject, repo),
+      content: (ctx) => renderGitHubContent(ctx, subject, repo),
+    },
+    headSlots: buildGitHubHeadSlots(subject),
+    styleAttributeEmitStrategy: "head",
+  });
+
+  return H.render(page);
+};
+
+const respondGitHubPage = (
+  subjectId?: string,
+  repoSlug?: string,
+) => {
+  const subject = getGitHubSubject(subjectId);
+  const repo = getGitHubRepo(subject, repoSlug);
+  return htmlResponse(gitHubPageHtml(subject, repo));
+};
+
 app.use(async (c, next) => {
   const u = new URL(c.req.url);
   console.log("[req]", c.req.method, u.pathname);
   return await next();
 });
 
-app.get("/", () =>
-  new Response(pageHtml(), {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  }));
+app.get("/", () => htmlResponse(pageHtml()));
+
+app.get("/github", () => respondGitHubPage());
+app.get(
+  "/github/:subject/:repo",
+  (c) => respondGitHubPage(c.params.subject, c.params.repo),
+);
+app.get("/github/:subject", (c) => respondGitHubPage(c.params.subject));
 
 app.serve({ port: 7599 });
