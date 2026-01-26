@@ -1,3 +1,4 @@
+import type { RenderCtx } from "../../natural-html/design-system.ts";
 import {
   type ComponentStylesheets,
   defineComponent,
@@ -528,3 +529,169 @@ export const navSection = defineComponent<NavSectionProps, RenderInput>(
       ...renderContents(ctx, props.children),
     ),
 );
+
+export type SidebarNavChildLink = {
+  readonly label: string;
+  readonly href?: string;
+  readonly active?: boolean;
+};
+
+export type SidebarNavEntry =
+  | { kind: "category"; label: string }
+  | {
+    kind: "link";
+    label: string;
+    href?: string;
+    icon?: Content<RenderInput, NamingStrategy>;
+    active?: boolean;
+  }
+  | {
+    kind: "expandable";
+    label: string;
+    icon?: Content<RenderInput, NamingStrategy>;
+    chevron?: Content<RenderInput, NamingStrategy>;
+    expanded?: boolean;
+    children: readonly SidebarNavChildLink[];
+  };
+
+export type SidebarSubject = {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly icon?: Content<RenderInput, NamingStrategy>;
+  readonly href?: string;
+};
+
+type SubjectSelectorConfig = {
+  readonly subjects: readonly SidebarSubject[];
+  readonly activeId?: string;
+  readonly icon?: Content<RenderInput, NamingStrategy>;
+  readonly chevron?: Content<RenderInput, NamingStrategy>;
+  readonly triggerId?: string;
+  readonly popupId?: string;
+  readonly checkmark?: Content<RenderInput, NamingStrategy>;
+  readonly onSelect?: (subject: SidebarSubject) => string | undefined;
+};
+
+export class NaturalSidebarBuilder {
+  readonly #ctx: RenderCtx<RenderInput, NamingStrategy>;
+  #header?: SidebarHeaderProps;
+  #search?: SearchBarProps;
+  #subjectConfig?: SubjectSelectorConfig;
+  #navEntries: SidebarNavEntry[] = [];
+
+  constructor(ctx: RenderCtx<RenderInput, NamingStrategy>) {
+    this.#ctx = ctx;
+  }
+
+  withHeader(header: SidebarHeaderProps): this {
+    this.#header = header;
+    return this;
+  }
+
+  withSearchBar(search: SearchBarProps): this {
+    this.#search = search;
+    return this;
+  }
+
+  withSubjectSelector(config: SubjectSelectorConfig): this {
+    this.#subjectConfig = config;
+    return this;
+  }
+
+  withNavEntries(entries: SidebarNavEntry[]): this {
+    this.#navEntries = entries;
+    return this;
+  }
+
+  build(): h.RawHtml {
+    const parts: h.RawHtml[] = [];
+    if (this.#header) {
+      parts.push(sidebarHeader(this.#ctx, this.#header));
+    }
+    if (this.#search) {
+      parts.push(searchBar(this.#ctx, this.#search));
+    }
+    if (this.#subjectConfig) {
+      const selector = this.renderSubjectSelector(this.#subjectConfig);
+      if (selector) parts.push(selector);
+    }
+    if (this.#navEntries.length > 0) {
+      parts.push(
+        navSection(this.#ctx, {
+          children: this.#navEntries.map((entry) => this.renderNavEntry(entry)),
+        }),
+      );
+    }
+    return h.div(...parts);
+  }
+
+  private renderSubjectSelector(
+    config: SubjectSelectorConfig,
+  ): h.RawHtml | null {
+    if (!config.subjects.length) return null;
+    const name =
+      config.subjects.find((subject) => subject.id === config.activeId)
+        ?.title ??
+        config.subjects[0]?.title ??
+        "";
+    const options = config.subjects.map((subject) => {
+      const href = config.onSelect?.(subject) ?? subject.href;
+      const option = subjectOption(this.#ctx, {
+        title: subject.title,
+        description: subject.description,
+        icon: subject.icon,
+        checkmark: config.checkmark,
+        value: subject.id,
+        selected: subject.id === config.activeId,
+      });
+
+      return href
+        ? h.a(
+          {
+            href,
+            style: "display:block;text-decoration:none;color:inherit;",
+          },
+          option,
+        )
+        : option;
+    });
+
+    return subjectSelector(this.#ctx, {
+      name,
+      icon: config.icon,
+      chevron: config.chevron,
+      triggerId: config.triggerId,
+      popupId: config.popupId,
+      options,
+    });
+  }
+
+  private renderNavEntry(entry: SidebarNavEntry): h.RawHtml {
+    switch (entry.kind) {
+      case "category":
+        return navCategory(this.#ctx, { label: entry.label });
+      case "link":
+        return navLink(this.#ctx, {
+          label: entry.label,
+          href: entry.href,
+          icon: entry.icon,
+          active: entry.active,
+        });
+      case "expandable":
+        return navExpandable(this.#ctx, {
+          label: entry.label,
+          icon: entry.icon,
+          chevron: entry.chevron,
+          expanded: entry.expanded,
+          children: entry.children.map((child) =>
+            navChildLink(this.#ctx, {
+              label: child.label,
+              href: child.href,
+              active: child.active,
+            })
+          ),
+        });
+    }
+  }
+}

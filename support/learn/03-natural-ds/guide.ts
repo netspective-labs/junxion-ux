@@ -35,18 +35,12 @@ import {
   imageWithCaption,
   keyboardShortcut,
   naturalDesignSystem,
-  navCategory,
-  navChildLink,
-  navExpandable,
-  navLink,
-  navSection,
+  NaturalSidebarBuilder,
   pageHeader,
-  searchBar,
   sectionHeading,
-  sidebarHeader,
+  type SidebarNavEntry,
+  type SidebarSubject,
   steps,
-  subjectOption,
-  subjectSelector,
   subsectionHeading,
   tabs,
   tocLink,
@@ -158,6 +152,64 @@ type ContextNavTarget = "docs" | "github";
 
 type DsRenderCtx = RenderCtx<RenderInput, NamingStrategy>;
 
+const docsNavEntries: SidebarNavEntry[] = [
+  { kind: "category", label: "Foundations" },
+  {
+    kind: "link",
+    label: "Layout Structure",
+    href: "#layout",
+    icon: icons.navIcon,
+    active: true,
+  },
+  {
+    kind: "link",
+    label: "Color Palette",
+    href: "#colors",
+    icon: icons.navIcon,
+  },
+  {
+    kind: "link",
+    label: "Typography",
+    href: "#typography",
+    icon: icons.navIcon,
+  },
+  { kind: "link", label: "Spacing", href: "#spacing", icon: icons.navIcon },
+  { kind: "category", label: "Components" },
+  {
+    kind: "expandable",
+    label: "Manual Setup",
+    icon: icons.navIcon,
+    chevron: icons.chevronDown,
+    expanded: true,
+    children: [
+      { label: "React" },
+      { label: "Vue", active: true },
+      { label: "Svelte" },
+      { label: "Vanilla JS" },
+    ],
+  },
+  {
+    kind: "link",
+    label: "Code Blocks",
+    href: "#code-blocks",
+    icon: icons.navIcon,
+  },
+  { kind: "link", label: "Tabs", href: "#tabs", icon: icons.navIcon },
+  { kind: "link", label: "Callouts", href: "#callouts", icon: icons.navIcon },
+  { kind: "link", label: "Feature Cards", href: "#cards", icon: icons.navIcon },
+  { kind: "link", label: "Accordion", href: "#accordion", icon: icons.navIcon },
+  { kind: "link", label: "File Tree", href: "#file-tree", icon: icons.navIcon },
+  { kind: "link", label: "Steps", href: "#steps", icon: icons.navIcon },
+  { kind: "link", label: "API Tables", href: "#tables", icon: icons.navIcon },
+  { kind: "link", label: "Badges", href: "#badges", icon: icons.navIcon },
+  {
+    kind: "link",
+    label: "Keyboard Shortcuts",
+    href: "#keyboard",
+    icon: icons.navIcon,
+  },
+];
+
 const buildContextHeader = (ctx: DsRenderCtx, active: ContextNavTarget) =>
   contextHeaderContent(ctx, {
     brand: contextBrand(ctx, {
@@ -215,12 +267,8 @@ type GitHubRepo = {
   readonly path?: string;
 };
 
-type GitHubSubject = {
-  readonly id: GitHubSubjectId;
-  readonly title: string;
+type GitHubSubject = SidebarSubject & {
   readonly org: string;
-  readonly description: string;
-  readonly icon: H.RawHtml;
   readonly repos: readonly GitHubRepo[];
 };
 
@@ -228,66 +276,96 @@ const gitHubSubjects: Record<GitHubSubjectId, GitHubSubject> = {
   netspective: {
     id: "netspective",
     title: "Netspective",
-    org: "netspective",
+    href: "/github/netspective",
     description: "Core ContinuUX tooling and docs living under Netspective.",
     icon: icons.docs,
-    repos: [
-      {
-        slug: "fluent",
-        name: "Fluent",
-        description: "Netspective Fluent M2M Platform",
-        url: "https://github.com/netspective/fluent",
-      },
-    ],
-  },
-  "netspective-labs": {
-    id: "netspective-labs",
-    title: "Netspective Labs",
-    org: "netspective-labs",
-    description:
-      "Experimental labs and prototypes that push CI/CD and runtime tooling.",
-    icon: icons.grid,
+    org: "netspective",
     repos: [
       {
         slug: "autarkic",
         name: "Autarkic",
         description:
           "Deno UI shell combining Natural DS with ContinuUX patterns.",
-        url: "https://github.com/netspective-labs/autarkic",
+        url: "https://github.com/netspective/autarkic",
+        path: "/netspective/autarkic",
+      },
+      {
+        slug: "continuux",
+        name: "ContinuUX",
+        description: "Typed UI primitives and runtime for guided interfaces.",
+        url: "https://github.com/netspective/continuux",
+        path: "/netspective/continuux",
+      },
+      {
+        slug: "natural-ds",
+        name: "Natural DS",
+        description: "The shared design system used throughout these docs.",
+        url: "https://github.com/netspective/natural-ds",
+        path: "/netspective/natural-ds",
+      },
+    ],
+  },
+  "netspective-labs": {
+    id: "netspective-labs",
+    title: "Netspective Labs",
+    href: "/github/netspective-labs",
+    description:
+      "Experimental labs and prototypes that push CI/CD and runtime tooling.",
+    icon: icons.grid,
+    org: "netspective-labs",
+    repos: [
+      {
+        slug: "home-polyglot",
+        name: "Home Polyglot",
+        description: "Prototype data portal for multilingual smart homes.",
+        url: "https://github.com/netspective-labs/home-polyglot",
+        path: "/netspective-labs/home-polyglot",
       },
       {
         slug: "sql-aide",
         name: "SQL Aide",
         description: "CLI and UI helpers for managing schema migrations.",
         url: "https://github.com/netspective-labs/sql-aide",
+        path: "/netspective-labs/sql-aide",
       },
       {
         slug: "aide",
         name: "Aide",
         description: "Collection of shared helper libraries for automation.",
         url: "https://github.com/netspective-labs/aide",
+        path: "/netspective-labs/aide",
       },
     ],
   },
   programmablemd: {
     id: "programmablemd",
     title: "ProgrammableMD",
-    org: "programmablemd",
+    href: "/github/programmablemd",
     description:
       "Healthcare data and workflow automations from ProgrammableMD.",
     icon: icons.globe,
+    org: "programmablemd",
     repos: [
       {
         slug: "spry",
         name: "Spry",
         description: "Behavioral health tracking platform UX.",
         url: "https://github.com/programmablemd/spry",
+        path: "/programmablemd/spry",
       },
       {
         slug: "assurance-prime",
         name: "Assurance Prime",
         description: "Decision support engine for value-based care teams.",
         url: "https://github.com/programmablemd/assurance-prime",
+        path: "/programmablemd/assurance-prime",
+      },
+      {
+        slug: "sprybi",
+        name: "SpryBI",
+        description: "BI dashboards for ProgrammableMD care networks.",
+        url: "https://github.com/programmablemd/sprybi",
+        path: "/programmablemd/sprybi",
       },
     ],
   },
@@ -355,105 +433,19 @@ const pageHtml = (): string => {
     slots: {
       contextHeader: (ctx) => buildContextHeader(ctx, "docs"),
       sidebar: (ctx) =>
-        H.div(
-          sidebarHeader(ctx, {
+        new NaturalSidebarBuilder(ctx)
+          .withHeader({
             label: "Design System",
             iconText: "DS",
             toggleIcon: icons.toggle,
-          }),
-          searchBar(ctx, {
+          })
+          .withSearchBar({
             placeholder: "Search components...",
             icon: icons.searchSmall,
             shortcut: ["Cmd", "K"],
-          }),
-          subjectSelector(ctx, {
-            name: "Subject 1",
-            icon: icons.grid,
-            chevron: icons.chevronsUpDown,
-            triggerId: "subject-trigger",
-            popupId: "subject-popup",
-            options: [
-              subjectOption(ctx, {
-                title: "Subject 1",
-                description: "Primary subject area",
-                icon: icons.grid,
-                checkmark: icons.check,
-                value: "subject-1",
-                selected: true,
-              }),
-              subjectOption(ctx, {
-                title: "Subject 2",
-                description: "Secondary subject area",
-                icon: icons.navIcon,
-                checkmark: icons.check,
-                value: "subject-2",
-              }),
-              subjectOption(ctx, {
-                title: "Subject 3",
-                description: "Tertiary subject area",
-                icon: icons.navIcon,
-                checkmark: icons.check,
-                value: "subject-3",
-              }),
-              subjectOption(ctx, {
-                title: "Subject 4",
-                description: "Additional subject area",
-                icon: icons.navIcon,
-                checkmark: icons.check,
-                value: "subject-4",
-              }),
-            ],
-          }),
-          navSection(ctx, {
-            children: [
-              navCategory(ctx, { label: "Foundations" }),
-              navLink(ctx, {
-                label: "Layout Structure",
-                href: "#layout",
-                icon: icons.navIcon,
-                active: true,
-              }),
-              navLink(ctx, {
-                label: "Color Palette",
-                href: "#colors",
-                icon: icons.navIcon,
-              }),
-              navLink(ctx, {
-                label: "Typography",
-                href: "#typography",
-                icon: icons.navIcon,
-              }),
-              navLink(ctx, {
-                label: "Spacing",
-                href: "#spacing",
-                icon: icons.navIcon,
-              }),
-              navCategory(ctx, { label: "Components" }),
-              navExpandable(ctx, {
-                label: "Manual Setup",
-                icon: icons.navIcon,
-                chevron: icons.chevronDown,
-                expanded: true,
-                children: [
-                  navChildLink(ctx, { label: "React" }),
-                  navChildLink(ctx, { label: "Vue", active: true }),
-                  navChildLink(ctx, { label: "Svelte" }),
-                  navChildLink(ctx, { label: "Vanilla JS" }),
-                ],
-              }),
-              navLink(ctx, { label: "Code Blocks", href: "#code-blocks" }),
-              navLink(ctx, { label: "Tabs", href: "#tabs" }),
-              navLink(ctx, { label: "Callouts", href: "#callouts" }),
-              navLink(ctx, { label: "Feature Cards", href: "#cards" }),
-              navLink(ctx, { label: "Accordion", href: "#accordion" }),
-              navLink(ctx, { label: "File Tree", href: "#file-tree" }),
-              navLink(ctx, { label: "Steps", href: "#steps" }),
-              navLink(ctx, { label: "API Tables", href: "#tables" }),
-              navLink(ctx, { label: "Badges", href: "#badges" }),
-              navLink(ctx, { label: "Keyboard Shortcuts", href: "#keyboard" }),
-            ],
-          }),
-        ),
+          })
+          .withNavEntries(docsNavEntries)
+          .build(),
       breadcrumbs: (ctx) =>
         combineHast(
           breadcrumbItem(ctx, {
@@ -1206,50 +1198,45 @@ const renderGitHubSidebar = (
   ctx: DsRenderCtx,
   subject: GitHubSubject,
   activeRepo: GitHubRepo,
-) =>
-  H.div(
-    sidebarHeader(ctx, {
+) => {
+  const subjects = gitHubSubjectOrder.map((subjectId) =>
+    gitHubSubjects[subjectId]
+  );
+  const navEntries: SidebarNavEntry[] = [
+    { kind: "category" as const, label: "Repositories" },
+    ...subject.repos.map((repo) => ({
+      kind: "link" as const,
+      label: repo.name,
+      href: `/github/${subject.id}/${repo.slug}`,
+      icon: icons.navIcon,
+      active: repo.slug === activeRepo.slug,
+    })),
+  ];
+
+  return new NaturalSidebarBuilder(ctx)
+    .withHeader({
       label: "GitHub Explorer",
       iconText: "GH",
       toggleIcon: icons.toggle,
-    }),
-    subjectSelector(ctx, {
-      name: subject.title,
-      icon: subject.icon,
+    })
+    .withSearchBar({
+      placeholder: "Filter repos or subjects...",
+      icon: icons.searchSmall,
+      shortcut: ["Cmd", "K"],
+    })
+    .withSubjectSelector({
+      subjects,
+      activeId: subject.id,
+      icon: icons.grid,
       chevron: icons.chevronsUpDown,
       triggerId: "subject-trigger",
       popupId: "subject-popup",
-      options: gitHubSubjectOrder.map((subjectId) =>
-        H.a(
-          {
-            href: `/github/${subjectId}`,
-            style: "display:block;text-decoration:none;color:inherit;",
-          },
-          subjectOption(ctx, {
-            title: gitHubSubjects[subjectId].title,
-            description: gitHubSubjects[subjectId].description,
-            icon: gitHubSubjects[subjectId].icon,
-            checkmark: icons.check,
-            value: subjectId,
-            selected: subjectId === subject.id,
-          }),
-        )
-      ),
-    }),
-    navSection(ctx, {
-      children: [
-        navCategory(ctx, { label: "Repositories" }),
-        ...subject.repos.map((repo) =>
-          navLink(ctx, {
-            label: repo.name,
-            href: `/github/${subject.id}/${repo.slug}`,
-            icon: icons.navIcon,
-            active: repo.slug === activeRepo.slug,
-          })
-        ),
-      ],
-    }),
-  );
+      checkmark: icons.check,
+      onSelect: (sub) => `/github/${sub.id}`,
+    })
+    .withNavEntries(navEntries)
+    .build();
+};
 
 const renderGitHubBreadcrumbs = (
   ctx: DsRenderCtx,
