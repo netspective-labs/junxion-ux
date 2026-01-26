@@ -30,7 +30,7 @@
 
   "tasks": {
     "check": "deno check",
-    "fmt": "deno fmt --ignore=\"**/*.xml\"",
+    "fmt": "deno fmt --ignore=\"**/*.xml\" --ignore=\"**/*_test.html\"",
     "lint": "deno lint --ignore=\"**/*.xml\"",
 
     // tests require Playwright so be sure to run deno task test:install-deps once
@@ -38,7 +38,7 @@
     "test": "deno test -A --unstable-bundle lib/natural-html/ lib/continuux/",
 
     "sync-import-map": "deno eval --ext ts 'import JSON5 from \"npm:json5@^2\"; const raw = await Deno.readTextFile(\"deno.jsonc\"); const cfg = JSON5.parse(raw); const imports = cfg.imports ?? {}; await Deno.writeTextFile(\"import_map.json\", JSON.stringify({ imports }, null, 2)); console.log(\"import_map.json synced\");' && deno fmt import_map.json",
-    "git-hook-pre-commit": "deno fmt --check --ignore=\"**/*.xml\" && deno lint --ignore=\"**/*.xml\" && deno test --unstable-bundle --parallel --allow-all --v8-flags=\"--max-old-space-size=4096\"",
+    "git-hook-pre-commit": "deno fmt --check --ignore=\"**/*.xml\" --ignore=\"**/*_test.html\" && deno lint --ignore=\"**/*.xml\" && deno test --unstable-bundle --parallel --allow-all --v8-flags=\"--max-old-space-size=4096\"",
     "git-hook-pre-push": "deno test --unstable-bundle --parallel --allow-all --v8-flags=\"--max-old-space-size=4096\"",
     "prepare-publish": "git semtag final",
 
