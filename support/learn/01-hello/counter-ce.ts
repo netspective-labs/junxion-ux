@@ -9,7 +9,6 @@
 import { Application } from "../../../lib/continuux/http.ts";
 import {
   createCx,
-  type CxActionHandlers,
   defineSchemas,
 } from "../../../lib/continuux/interaction-html.ts";
 import {
@@ -27,50 +26,67 @@ const appState = { count: 0 };
 type State = typeof appState;
 type Vars = Record<string, never>;
 
-const schemas = defineSchemas({
-  increment: (value: unknown) => decodeCxEnvelope(value),
-  reset: (value: unknown) => decodeCxEnvelope(value),
-});
+const interactivityAide = <
+  State extends { count: number },
+  Vars extends Record<string, unknown>,
+>(
+  state: State,
+) => {
+  const schemas = defineSchemas({
+    increment: decodeCxEnvelope,
+    reset: decodeCxEnvelope,
+  });
 
-type ServerEvents = {
-  readonly count: { value: number };
-  readonly status: { text: string };
+  type ServerEvents = {
+    readonly count: { value: number };
+    readonly status: { text: string };
+  };
+
+  const cx = createCx<State, Vars, typeof schemas, ServerEvents>(schemas);
+  const builder = new CxMiddlewareBuilder<ServerEvents>({
+    sseUrl: "/ce/sse",
+    postUrl: "/ce/action",
+    importUrl: "/.cx/browser-ua-aide.js",
+  });
+  const hub = builder.hub;
+
+  const commitAction = (
+    action: "increment" | "reset",
+    nextValue?: number,
+  ): CxHandlerResult => {
+    if (typeof nextValue === "number") {
+      state.count = nextValue;
+    } else {
+      state.count += 1;
+    }
+
+    hub.broadcast("count", { value: state.count });
+    hub.broadcast("status", { text: `ok:${action}` });
+    return { ok: true };
+  };
+
+  const middleware = builder.middleware<State, Vars, typeof schemas, "action">({
+    uaCacheControl: "no-store",
+    onConnect: async ({ session }) => {
+      await session.sendWhenReady("count", { value: state.count });
+      await session.sendWhenReady("status", { text: "connected" });
+    },
+    interaction: {
+      cx,
+      handlers: {
+        increment: () => commitAction("increment"),
+        reset: () => commitAction("reset", 0),
+      },
+    },
+  });
+
+  return { cx, builder, middleware };
 };
 
-const cx = createCx<State, Vars, typeof schemas, ServerEvents>(schemas);
-const builder = new CxMiddlewareBuilder<ServerEvents>({
-  sseUrl: "/ce/sse",
-  postUrl: "/ce/action",
-  importUrl: "/.cx/browser-ua-aide.js",
-});
-const hub = builder.hub;
-
-const commitAction = (
-  action: "increment" | "reset",
-  nextValue?: number,
-): CxHandlerResult => {
-  if (typeof nextValue === "number") {
-    appState.count = nextValue;
-  } else {
-    appState.count += 1;
-  }
-
-  hub.broadcast("count", { value: appState.count });
-  hub.broadcast("status", { text: `ok:${action}` });
-  return { ok: true };
-};
-
-const handlers: CxActionHandlers<
+const { builder, middleware: interactivityMiddleware } = interactivityAide<
   State,
-  Vars,
-  typeof schemas,
-  ServerEvents,
-  "action"
-> = {
-  increment: () => commitAction("increment"),
-  reset: () => commitAction("reset", 0),
-};
-
+  Vars
+>(appState);
 const pageHtml = (): string => {
   const { sseUrl, postUrl, sseWithCredentials } = builder.config;
   const sseCredValue = sseWithCredentials ? "true" : "false";
@@ -125,21 +141,7 @@ const pageHtml = (): string => {
 };
 
 const app = Application.sharedState<State, Vars>(appState);
-
-app.use(
-  builder.middleware<State, Vars, typeof schemas, "action">({
-    uaCacheControl: "no-store",
-    onConnect: async ({ session }) => {
-      await session.sendWhenReady("count", { value: appState.count });
-      await session.sendWhenReady("status", { text: "connected" });
-    },
-    interaction: {
-      cx,
-      handlers,
-    },
-  }),
-);
-
+app.use(interactivityMiddleware);
 app.get(
   "/",
   () =>
@@ -148,6 +150,10 @@ app.get(
     }),
 );
 
+// this is necessary because in counter-ce.js we import "../../../lib/continuux/browser-ua-aide.js"
+// so that the IDE editor can give us code completion and linting but
+// browser-ua-aide.js is mounted at "/.cx/browser-ua-aide.js" when being browsed
+// so we have to translate it here.
 app.get("/counter-ce.js", async () => {
   const path = await Deno.realPath(counterScriptUrl);
   let js = await Deno.readTextFile(path);

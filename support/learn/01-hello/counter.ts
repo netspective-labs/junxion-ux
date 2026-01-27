@@ -36,7 +36,7 @@ const appState = { count: 0 };
 type State = typeof appState;
 type Vars = Record<string, never>;
 
-const createInteractivity = <
+const interactivityAide = <
   State extends { count: number },
   Vars extends Record<string, unknown>,
 >(
@@ -131,11 +131,11 @@ const createInteractivity = <
 
 const {
   cx,
-  middleware: interativityMiddleware,
+  middleware: interactivityMiddleware,
   sseDiagnostics,
   sseDiagsElement,
   sseDiagsElementId,
-} = createInteractivity<State, Vars>(appState);
+} = interactivityAide<State, Vars>(appState);
 
 const pageHtml = (): string => {
   const boot = cx.html.bootModuleScriptTag({
@@ -235,7 +235,7 @@ const pageHtml = (): string => {
 const app = Application.sharedState(appState);
 
 app.use(sseDiagnostics.middleware<State, Vars>());
-app.use(interativityMiddleware);
+app.use(interactivityMiddleware);
 app.get(
   "/",
   () =>
