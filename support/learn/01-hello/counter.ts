@@ -26,6 +26,7 @@ import {
   defineSchemas,
 } from "../../../lib/continuux/interaction-html.ts";
 import {
+  type CxHandlerResult,
   CxMiddlewareBuilder,
   decodeCxEnvelope,
 } from "../../../lib/continuux/interaction.ts";
@@ -63,6 +64,33 @@ const builder = new CxMiddlewareBuilder<ServerEvents>({
 const { setText, setDataset } = builder.domJs;
 const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
 
+const commitAction = (
+  action: "increment" | "reset",
+  spec: string,
+  sessionId?: string,
+  nextValue?: number,
+): CxHandlerResult => {
+  appState.count = typeof nextValue === "number"
+    ? nextValue
+    : appState.count + 1;
+  const js = [
+    setText("count", String(appState.count)),
+    setText("status", `ok:${action}`),
+    setDataset("lastSpec", spec),
+    setDataset("lastCount", String(appState.count)),
+  ].join("\n");
+
+  hub.broadcast("js", js);
+  if (sessionId) {
+    sseDiagnostics.diag(sessionId, {
+      message: `${action}`,
+      level: "info",
+      payload: { sessionId, count: appState.count, execDomJS: js },
+    });
+  }
+  return { ok: true };
+};
+
 const handlers: CxActionHandlers<
   State,
   Vars,
@@ -70,42 +98,10 @@ const handlers: CxActionHandlers<
   ServerEvents,
   "action"
 > = {
-  increment: ({ cx: env, sessionId }) => {
-    appState.count += 1;
-    const js = [
-      setText("count", String(appState.count)),
-      setText("status", "ok:increment"),
-      setDataset("lastSpec", env.spec),
-      setDataset("lastCount", String(appState.count)),
-    ].join("\n");
-    hub.broadcast("js", js);
-    if (sessionId) {
-      sseDiagnostics.diag(sessionId, {
-        message: `increment`,
-        level: "info",
-        payload: { sessionId, count: appState.count, execDomJS: js },
-      });
-    }
-    return { ok: true };
-  },
-  reset: ({ cx: env, sessionId }) => {
-    appState.count = 0;
-    const js = [
-      setText("count", "0"),
-      setText("status", "ok:reset"),
-      setDataset("lastSpec", env.spec),
-      setDataset("lastCount", "0"),
-    ].join("\n");
-    hub.broadcast("js", js);
-    if (sessionId) {
-      sseDiagnostics.diag(sessionId, {
-        message: `reset`,
-        level: "info",
-        payload: { sessionId, count: appState.count, execDomJS: js },
-      });
-    }
-    return { ok: true };
-  },
+  increment: ({ cx: env, sessionId }) =>
+    commitAction("increment", env.spec, sessionId),
+  reset: ({ cx: env, sessionId }) =>
+    commitAction("reset", env.spec, sessionId, 0),
 };
 
 const pageHtml = (): string => {
@@ -228,7 +224,7 @@ app.use(
         level: "info",
       });
     },
-    post: {
+    interaction: {
       cx,
       handlers,
     },

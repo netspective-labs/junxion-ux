@@ -20,11 +20,10 @@ import { Application, htmlResponse } from "../../../lib/continuux/http.ts";
 import {
   createCx,
   type CxActionHandlers,
-  cxPostHandler,
   defineSchemas,
 } from "../../../lib/continuux/interaction-html.ts";
 import {
-  cxSseRegister,
+  CxMiddlewareBuilder,
   decodeCxEnvelope,
 } from "../../../lib/continuux/interaction.ts";
 import {
@@ -100,6 +99,7 @@ const appState: State = { submissions: [] };
 const cx = createCx<State, Vars, typeof schemas, ServerEvents>(schemas);
 const hub = cx.server.sseHub();
 const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
+const cxBuilder = new CxMiddlewareBuilder<ServerEvents>({ hub });
 
 const fieldSchemas: Record<string, z.ZodTypeAny> = {
   name: nameSchema,
@@ -146,7 +146,7 @@ const validationWrapper = (
   );
 };
 
-const builder = createDialog(dialogName, formSchema);
+const dialogBuilder = createDialog(dialogName, formSchema);
 const fieldOrder = [
   "name",
   "email",
@@ -156,7 +156,7 @@ const fieldOrder = [
   "subscribe",
 ] as const;
 
-builder.field("name", {
+dialogBuilder.field("name", {
   label: "Full name",
   description: "How should we address you in follow-ups?",
   renderer: inputField({
@@ -166,7 +166,7 @@ builder.field("name", {
   wrapper: validationWrapper,
 });
 
-builder.field("email", {
+dialogBuilder.field("email", {
   label: "Email",
   description: "We will never spam your inbox.",
   renderer: inputField({
@@ -177,7 +177,7 @@ builder.field("email", {
   wrapper: validationWrapper,
 });
 
-builder.field("age", {
+dialogBuilder.field("age", {
   label: "Age",
   description: "Used for contextualizing recommendations.",
   renderer: inputField({
@@ -188,7 +188,7 @@ builder.field("age", {
   wrapper: validationWrapper,
 });
 
-builder.field("mood", {
+dialogBuilder.field("mood", {
   label: "Current mood",
   renderer: selectField({
     options: pointingMood.map((value) => ({
@@ -202,7 +202,7 @@ builder.field("mood", {
   wrapper: validationWrapper,
 });
 
-builder.field("color", {
+dialogBuilder.field("color", {
   label: "Favorite hue",
   renderer: selectField({
     options: palette.map((value) => ({
@@ -216,7 +216,7 @@ builder.field("color", {
   wrapper: validationWrapper,
 });
 
-builder.field("subscribe", {
+dialogBuilder.field("subscribe", {
   label: "Subscribe to updates",
   renderer: checkboxField({
     value: "true",
@@ -225,7 +225,7 @@ builder.field("subscribe", {
   wrapper: validationWrapper,
 });
 
-const dialog = builder.mode("inline").build();
+const dialog = dialogBuilder.mode("inline").build();
 
 const initialData: Partial<z.infer<typeof formSchema>> = {
   name: "Ada",
@@ -507,38 +507,29 @@ const app = Application.sharedState(appState);
 // Serve the inspector module via middleware (instead of app.get(...)).
 app.use(sseDiagnostics.middleware<State, Vars>());
 
-app.get("/browser-ua-aide.js", () => cx.server.uaModuleResponse("no-store"));
+app.use(
+  cxBuilder.middleware<State, Vars, typeof schemas, "action">({
+    uaCacheControl: "no-store",
+    onConnect: async ({ session, sessionId }) => {
+      await session.sendWhenReady(
+        "js",
+        setSubmissionMessageJs(
+          "Connected. Form values stream validation as you move between fields.",
+          true,
+        ),
+      );
+      sseDiagnostics.connection(sessionId, {
+        message: "SSE diagnostics channel established",
+        level: "info",
+      });
+    },
+    interaction: {
+      cx,
+      handlers,
+    },
+  }),
+);
 
 app.get("/", () => htmlResponse(pageHtml()));
-
-app.get("/cx/sse", (c) =>
-  c.sse<ServerEvents>(async (session) => {
-    const sessionId = c.query("sessionId") ?? "unknown";
-    cxSseRegister(hub, sessionId, session);
-    await session.sendWhenReady(
-      "js",
-      setSubmissionMessageJs(
-        "Connected. Form values stream validation as you move between fields.",
-        true,
-      ),
-    );
-    sseDiagnostics.connection(sessionId, {
-      message: "SSE diagnostics channel established",
-      level: "info",
-    });
-  }));
-
-app.post("/cx", async (c) => {
-  const body = await c.readJson();
-  const result = await cxPostHandler(cx, {
-    req: c.req,
-    body,
-    state: appState,
-    vars: c.vars,
-    sse: hub,
-    handlers,
-  });
-  return cx.server.toResponse(result);
-});
 
 app.serve({ port: 7744 });

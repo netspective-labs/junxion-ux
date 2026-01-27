@@ -795,7 +795,7 @@ export type CxMiddlewareBuilderSessionContext<
   hub: CxSseHub<E>;
 };
 
-export type CxMiddlewareBuilderPostOptions<
+export type CxMiddlewareBuilderInteractionDefinition<
   State extends Record<string, unknown>,
   Vars extends Record<string, unknown>,
   Schemas extends CxActionSchemas,
@@ -805,6 +805,20 @@ export type CxMiddlewareBuilderPostOptions<
   cx: CxKit<State, Vars, Schemas, E, Prefix>;
   handlers: CxActionHandlers<State, Vars, Schemas, E, Prefix>;
 };
+
+export type CxMiddlewareBuilderPostOptions<
+  State extends Record<string, unknown>,
+  Vars extends Record<string, unknown>,
+  Schemas extends CxActionSchemas,
+  Prefix extends string,
+  E extends SseEventMap,
+> = CxMiddlewareBuilderInteractionDefinition<
+  State,
+  Vars,
+  Schemas,
+  Prefix,
+  E
+>;
 
 export type CxMiddlewareBuilderMiddlewareOptions<
   State extends Record<string, unknown>,
@@ -821,6 +835,13 @@ export type CxMiddlewareBuilderMiddlewareOptions<
   ) => string | null;
   sseOptions?: Omit<SseOptions, "signal">;
   uaCacheControl?: string;
+  interaction?: CxMiddlewareBuilderInteractionDefinition<
+    State,
+    Vars,
+    Schemas,
+    Prefix,
+    E
+  >;
   post?: CxMiddlewareBuilderPostOptions<State, Vars, Schemas, Prefix, E>;
 };
 
@@ -890,21 +911,22 @@ export class CxMiddlewareBuilder<E extends SseEventMap> {
           );
         }
       }
+      const action = opts.interaction ?? opts.post;
       if (
         req.method === "POST" &&
         url.pathname === this.config.postUrl &&
-        opts.post
+        action
       ) {
         const body = await c.readJson();
-        const result = await cxPostHandler(opts.post.cx, {
+        const result = await cxPostHandler(action.cx, {
           req: c.req,
           body,
           state: c.state,
           vars: c.vars,
-          handlers: opts.post.handlers,
+          handlers: action.handlers,
           sse: this.hub,
         });
-        return opts.post.cx.server.toResponse(result);
+        return action.cx.server.toResponse(result);
       }
       return await next();
     };
