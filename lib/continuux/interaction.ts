@@ -457,40 +457,118 @@ export const sawDiag = (
   pred?: (d: CxDiagEvent) => boolean,
 ): boolean => diags.some((d) => d.kind === kind && (!pred || pred(d)));
 
-const setTextDomJs = (id: string, text: string) =>
-  `{
-  const __el = document.getElementById(${JSON.stringify(id)});
-  if (__el) __el.textContent = ${JSON.stringify(text)};
-}`;
+export type CxPatchSetTextOp = {
+  op: "setText";
+  selector: string;
+  text: string;
+};
 
-const setDatasetDomJs = (key: string, value: string) =>
-  `{
-  try { document.body.dataset[${JSON.stringify(key)}] = ${
-    JSON.stringify(value)
-  }; } catch {}
-}`;
+export type CxPatchSetAttributeOp = {
+  op: "setAttribute";
+  selector: string;
+  name: string;
+  value: string | null;
+};
 
-export const cxDomJs = {
-  setText: setTextDomJs,
-  setDataset: setDatasetDomJs,
+export type CxPatchSetDatasetOp = {
+  op: "setDataset";
+  selector: string;
+  key: string;
+  value: string | null;
+};
+
+export type CxPatchToggleClassOp = {
+  op: "toggleClass";
+  selector: string;
+  className: string;
+  active: boolean;
+};
+
+export type CxPatchOp =
+  | CxPatchSetTextOp
+  | CxPatchSetAttributeOp
+  | CxPatchSetDatasetOp
+  | CxPatchToggleClassOp;
+
+export type CxPatchPayload = {
+  ops: CxPatchOp[];
+};
+
+export const cxPatch = {
+  setText: (selector: string, text: string): CxPatchSetTextOp => ({
+    op: "setText",
+    selector,
+    text,
+  }),
+
+  setAttribute: (
+    selector: string,
+    name: string,
+    value: string | null,
+  ): CxPatchSetAttributeOp => ({
+    op: "setAttribute",
+    selector,
+    name,
+    value,
+  }),
+
+  setDataset: (
+    selector: string,
+    key: string,
+    value: string | null,
+  ): CxPatchSetDatasetOp => ({
+    op: "setDataset",
+    selector,
+    key,
+    value,
+  }),
+
+  toggleClass: (
+    selector: string,
+    className: string,
+    active: boolean,
+  ): CxPatchToggleClassOp => ({
+    op: "toggleClass",
+    selector,
+    className,
+    active,
+  }),
 } as const;
 
 /* =========================
  * SSE hub helpers
  * ========================= */
 
-export type CxSseHub<E extends SseEventMap> = {
-  register: (sessionId: string, session: SseSession<E>) => void;
-  unregister: (sessionId: string) => void;
+type CxSseJsMethods<E extends SseEventMap> = "js" extends keyof E ? {
+    js: (sessionId: string, data: E["js"]) => boolean;
+    broadcastJs: (data: E["js"]) => void;
+  }
+  // deno-lint-ignore ban-types
+  : {};
 
-  send: <K extends keyof E>(sessionId: string, event: K, data: E[K]) => boolean;
-  broadcast: <K extends keyof E>(event: K, data: E[K]) => void;
+type CxSsePatchMethods<E extends SseEventMap> = "patch" extends keyof E ? {
+    patch: (sessionId: string, data: E["patch"]) => boolean;
+    broadcastPatch: (data: E["patch"]) => void;
+  }
+  // deno-lint-ignore ban-types
+  : {};
 
-  js: (sessionId: string, jsText: string) => boolean;
-  broadcastJs: (jsText: string) => void;
+export type CxSseHub<E extends SseEventMap> =
+  & {
+    register: (sessionId: string, session: SseSession<E>) => void;
+    unregister: (sessionId: string) => void;
 
-  size: () => number;
-};
+    send: <K extends keyof E>(
+      sessionId: string,
+      event: K,
+      data: E[K],
+    ) => boolean;
+    broadcast: <K extends keyof E>(event: K, data: E[K]) => void;
+
+    size: () => number;
+  }
+  & CxSseJsMethods<E>
+  & CxSsePatchMethods<E>;
 
 const normalizeSessionId = (
   sessionId: string | null | undefined,
@@ -502,7 +580,13 @@ const normalizeSessionId = (
 };
 
 export const createSseHub = <E extends SseEventMap>(): CxSseHub<E> => {
-  const sessions = new Map<string, SseSession<E>>();
+  type SessionEntry = {
+    session: SseSession<E>;
+    readyResolved: boolean;
+    queue: Array<[keyof E, E[keyof E]]>;
+  };
+
+  const sessions = new Map<string, SessionEntry>();
 
   const unregister = (sessionId: string) => {
     const sid = normalizeSessionId(sessionId);
@@ -511,7 +595,7 @@ export const createSseHub = <E extends SseEventMap>(): CxSseHub<E> => {
     const s = sessions.get(sid);
     if (s) {
       try {
-        s.close();
+        s.session.close();
       } catch {
         // ignore
       }
@@ -531,10 +615,29 @@ export const createSseHub = <E extends SseEventMap>(): CxSseHub<E> => {
     }
 
     unregister(sid);
-    sessions.set(sid, session);
+    const entry: SessionEntry = {
+      session,
+      readyResolved: false,
+      queue: [],
+    };
+    sessions.set(sid, entry);
 
-    queueMicrotask(() => {
-      if (session.isClosed()) sessions.delete(sid);
+    void session.ready.then(() => {
+      entry.readyResolved = true;
+      if (entry.session.isClosed()) {
+        sessions.delete(sid);
+        return;
+      }
+      const q = entry.queue.splice(0);
+      for (const [event, data] of q) {
+        if (!entry.session.isClosed()) {
+          const ok = entry.session.send(event, data);
+          if (!ok) {
+            sessions.delete(sid);
+            break;
+          }
+        }
+      }
     });
   };
 
@@ -542,34 +645,50 @@ export const createSseHub = <E extends SseEventMap>(): CxSseHub<E> => {
     const sid = normalizeSessionId(sessionId);
     if (!sid) return false;
 
-    const s = sessions.get(sid);
-    if (!s || s.isClosed()) {
+    const entry = sessions.get(sid);
+    if (!entry || entry.session.isClosed()) {
       sessions.delete(sid);
       return false;
     }
-    const ok = s.send(event, data);
+    if (!entry.readyResolved) {
+      entry.queue.push([event, data]);
+      return true;
+    }
+    const ok = entry.session.send(event, data);
     if (!ok) sessions.delete(sid);
     return ok;
   };
 
   const broadcast = <K extends keyof E>(event: K, data: E[K]) => {
-    for (const [sid, s] of sessions) {
-      if (s.isClosed()) {
+    for (const [sid, entry] of sessions) {
+      if (entry.session.isClosed()) {
         sessions.delete(sid);
         continue;
       }
-      const ok = s.send(event, data);
+      if (!entry.readyResolved) {
+        entry.queue.push([event, data]);
+        continue;
+      }
+      const ok = entry.session.send(event, data);
       if (!ok) sessions.delete(sid);
     }
   };
 
-  const js = (sessionId: string, jsText: string) =>
-    // @ts-expect-error: only valid if E includes "js"
-    send(sessionId, "js", jsText);
+  const js = <K extends keyof E & "js">(
+    sessionId: string,
+    data: E[K],
+  ) => send(sessionId, "js" as K, data);
 
-  const broadcastJs = (jsText: string) =>
-    // @ts-expect-error: only valid if E includes "js"
-    broadcast("js", jsText);
+  const broadcastJs = <K extends keyof E & "js">(data: E[K]) =>
+    broadcast("js" as K, data);
+
+  const patch = <K extends keyof E & "patch">(
+    sessionId: string,
+    data: E[K],
+  ) => send(sessionId, "patch" as K, data);
+
+  const broadcastPatch = <K extends keyof E & "patch">(data: E[K]) =>
+    broadcast("patch" as K, data);
 
   return {
     register,
@@ -578,6 +697,8 @@ export const createSseHub = <E extends SseEventMap>(): CxSseHub<E> => {
     broadcast,
     js,
     broadcastJs,
+    patch,
+    broadcastPatch,
     size: () => sessions.size,
   };
 };
@@ -648,6 +769,7 @@ export type UserAgentAide = {
     events?: readonly CxDomEventName[];
     preventDefaultSubmit?: boolean;
     sseJsEventName?: string;
+    ssePatchEventName?: string;
     attrPrefix?: string;
   }) => string;
 };
@@ -706,6 +828,7 @@ export const userAgentAide = (
     events?: readonly CxDomEventName[];
     preventDefaultSubmit?: boolean;
     sseJsEventName?: string;
+    ssePatchEventName?: string;
     attrPrefix?: string;
   } = {}): string => {
     const importUrl = opts.importUrl ?? cfg.defaultImportUrl ??
@@ -737,6 +860,11 @@ export const userAgentAide = (
     }
     if (opts.sseJsEventName) {
       lines.push(`  sseJsEventName: ${JSON.stringify(opts.sseJsEventName)},`);
+    }
+    if (opts.ssePatchEventName) {
+      lines.push(
+        `  ssePatchEventName: ${JSON.stringify(opts.ssePatchEventName)},`,
+      );
     }
     if (opts.appVersion) {
       lines.push(`  appVersion: ${JSON.stringify(opts.appVersion)},`);
@@ -849,7 +977,8 @@ export class CxMiddlewareBuilder<E extends SseEventMap> {
   readonly config: CxMiddlewareBuilderResolvedConfig<E>;
   readonly hub: CxSseHub<E>;
   readonly userAgentAide: UserAgentAide;
-  readonly domJs = cxDomJs;
+  readonly patch = cxPatch;
+  readonly domJs = cxPatch;
 
   constructor(cfg: CxMiddlewareBuilderConfig<E> = {}) {
     this.hub = cfg.hub ?? createSseHub<E>();

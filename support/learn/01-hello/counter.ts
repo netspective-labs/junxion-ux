@@ -27,6 +27,7 @@ import {
 import {
   type CxHandlerResult,
   CxMiddlewareBuilder,
+  type CxPatchPayload,
   decodeCxEnvelope,
 } from "../../../lib/continuux/interaction.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
@@ -48,10 +49,10 @@ const interactivityAide = <
   });
 
   type ServerEvents = {
-    readonly js: string;
     readonly message: string;
     readonly diag: SseDiagnosticEntry;
     readonly connection: SseDiagnosticEntry;
+    readonly patch: CxPatchPayload;
   };
 
   const cx = createCx<State, Vars, typeof actions, ServerEvents>(actions);
@@ -62,7 +63,7 @@ const interactivityAide = <
     sseUrl: "/cx/sse",
     importUrl: "/browser-ua-aide.js",
   });
-  const { setText, setDataset } = builder.domJs;
+  const patch = builder.patch;
 
   const sseDiagsElement = customElement("sse-inspector");
   const sseDiagsElementId = `sse-diagnostics`;
@@ -75,19 +76,21 @@ const interactivityAide = <
     nextValue?: number,
   ): CxHandlerResult => {
     state.count = typeof nextValue === "number" ? nextValue : state.count + 1;
-    const js = [
-      setText("count", String(state.count)),
-      setText("status", `ok:${action}`),
-      setDataset("lastSpec", spec),
-      setDataset("lastCount", String(state.count)),
-    ].join("\n");
+    const payload: CxPatchPayload = {
+      ops: [
+        patch.setText("#count", String(state.count)),
+        patch.setText("#status", `ok:${action}`),
+        patch.setDataset("body", "lastSpec", spec),
+        patch.setDataset("body", "lastCount", String(state.count)),
+      ],
+    };
 
-    hub.broadcast("js", js);
+    hub.broadcast("patch", payload);
     if (sessionId) {
       sseDiagnostics.diag(sessionId, {
         message: `${action}`,
         level: "info",
-        payload: { sessionId, count: state.count, execDomJS: js },
+        payload: { sessionId, count: state.count, execPatch: payload },
       });
     }
     return { ok: true };
@@ -96,13 +99,14 @@ const interactivityAide = <
   const middleware = builder.middleware<State, Vars, typeof actions, "action">({
     uaCacheControl: "no-store",
     onConnect: async ({ session, sessionId }) => {
-      await session.sendWhenReady("js", setText("count", String(state.count)));
-      await session.sendWhenReady(
-        "js",
-        setDataset("lastCount", String(state.count)),
-      );
-      await session.sendWhenReady("js", setDataset("lastSpec", "init"));
-      await session.sendWhenReady("js", setText("status", "connected"));
+      await session.sendWhenReady("patch", {
+        ops: [
+          patch.setText("#count", String(state.count)),
+          patch.setDataset("body", "lastCount", String(state.count)),
+          patch.setDataset("body", "lastSpec", "init"),
+          patch.setText("#status", "connected"),
+        ],
+      });
       await session.sendWhenReady("message", `connected:${sessionId}`);
       sseDiagnostics.connection(sessionId, {
         message: "SSE diagnostics channel established",

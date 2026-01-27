@@ -83,6 +83,7 @@ import type {
   CxDomEventName,
   CxHandlerResult,
   CxInbound,
+  CxPatchPayload,
   CxSseHub,
   SchemaLike,
   UserAgentAide,
@@ -135,15 +136,6 @@ export type CxActionHandlers<
       sse?: CxSseHub<SseOut>;
       sessionId: string;
       requestId: string;
-
-      emit: {
-        send: <K2 extends keyof SseOut>(event: K2, data: SseOut[K2]) => boolean;
-        broadcast: <K2 extends keyof SseOut>(
-          event: K2,
-          data: SseOut[K2],
-        ) => void;
-        js: (jsText: string) => boolean;
-      };
     },
   ) => Promise<CxHandlerResult> | CxHandlerResult;
 };
@@ -335,7 +327,11 @@ export const createCx = <
   State,
   Vars extends Record<string, unknown>,
   Schemas extends CxActionSchemas,
-  SseOut extends SseEventMap = { message: string; js: string },
+  SseOut extends SseEventMap = {
+    message: string;
+    js: string;
+    patch: CxPatchPayload;
+  },
   Prefix extends string = "action",
 >(
   schemas: Schemas,
@@ -399,6 +395,7 @@ export const createCx = <
       events?: readonly CxDomEventName[];
       preventDefaultSubmit?: boolean;
       sseJsEventName?: string;
+      ssePatchEventName?: string;
       attrPrefix?: string;
       sseWithCredentials?: boolean;
       postUrl?: string;
@@ -422,6 +419,7 @@ export const createCx = <
         events: opts.events,
         preventDefaultSubmit: opts.preventDefaultSubmit,
         sseJsEventName: opts.sseJsEventName,
+        ssePatchEventName: opts.ssePatchEventName,
         attrPrefix: opts.attrPrefix ?? config.attrPrefix,
       });
 
@@ -594,22 +592,6 @@ export const createCx = <
 
       const sessionId = cx.client.sessionId;
       const requestId = cx.client.requestId;
-      const hub = opts?.sse;
-
-      const emit = {
-        send: <K extends keyof SseOut>(event: K, data: SseOut[K]) => {
-          if (!hub) return false;
-          return hub.send(sessionId, event, data);
-        },
-        broadcast: <K extends keyof SseOut>(event: K, data: SseOut[K]) => {
-          if (!hub) return;
-          hub.broadcast(event, data);
-        },
-        js: (jsText: string) => {
-          if (!hub) return false;
-          return hub.js(sessionId, jsText);
-        },
-      } as const;
 
       const ctx = {
         name: actionName,
@@ -623,7 +605,6 @@ export const createCx = <
         sse: opts?.sse,
         sessionId,
         requestId,
-        emit,
       };
 
       try {

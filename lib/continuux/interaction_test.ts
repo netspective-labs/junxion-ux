@@ -13,6 +13,8 @@ import {
   CX_DIAG_PREFIX,
   type CxDiagEvent,
   type CxInbound,
+  cxPatch,
+  type CxPatchPayload,
   decodeCxEnvelope,
   formatCxDiagnosticsDump,
   parseCxDiagLine,
@@ -78,9 +80,9 @@ Deno.test("continuux: interaction e2e", async (t) => {
     }
   });
 
-  type SendJs = (js: string) => void;
+  type SendPatch = (patch: CxPatchPayload) => void;
 
-  const sends: SendJs[] = [];
+  const sends: SendPatch[] = [];
   const posts: CxInbound[] = [];
 
   const app = Application.sharedState({});
@@ -98,14 +100,18 @@ Deno.test("continuux: interaction e2e", async (t) => {
   app.get(
     "/cx/sse",
     (c) =>
-      c.sse<{ js: string; message: string }>(async (session) => {
-        const sendJs = async (js: string) => {
-          await session.sendWhenReady("js", js);
-          await session.sendWhenReady("message", js);
+      c.sse<{ message: string; patch: CxPatchPayload }>(async (session) => {
+        const sendPatch = async (patch: CxPatchPayload) => {
+          await session.sendWhenReady("patch", patch);
+          await session.sendWhenReady("message", JSON.stringify(patch));
         };
-        const send: SendJs = (js) => void sendJs(js);
+        const send: SendPatch = (patch) => void sendPatch(patch);
         sends.push(send);
-        await sendJs(`window.__cx_sse_ready = "ok";`);
+        await sendPatch({
+          ops: [
+            cxPatch.setDataset("body", "cxSseReady", "ok"),
+          ],
+        });
       }),
   );
 
@@ -128,13 +134,15 @@ Deno.test("continuux: interaction e2e", async (t) => {
       );
     }
 
-    const js =
-      `document.body.dataset.lastSpec = ${JSON.stringify(cx.spec)};\n` +
-      `document.body.dataset.lastEvent = ${JSON.stringify(cx.domEvent)};\n` +
-      `const t = document.getElementById("domTarget");\n` +
-      `if (t) t.textContent = "ok:" + ${JSON.stringify(cx.spec)};\n`;
+    const payload: CxPatchPayload = {
+      ops: [
+        cxPatch.setDataset("body", "lastSpec", cx.spec),
+        cxPatch.setDataset("body", "lastEvent", cx.domEvent),
+        cxPatch.setText("#domTarget", `ok:${cx.spec}`),
+      ],
+    };
 
-    for (const send of sends) send(js);
+    for (const send of sends) send(payload);
     return new Response(null, { status: 204 });
   });
 
@@ -261,9 +269,11 @@ Deno.test("continuux: interaction e2e", async (t) => {
     });
 
     await t.step("SSE handshake executed in browser", async () => {
-      await page.waitForFunction('window.__cx_sse_ready === "ok"', undefined, {
-        timeout: 10_000,
-      });
+      await page.waitForFunction(
+        'document.body.dataset.cxSseReady === "ok"',
+        undefined,
+        { timeout: 10_000 },
+      );
     });
 
     await t.step(
