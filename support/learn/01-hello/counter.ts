@@ -22,7 +22,6 @@ import {
 import { Application } from "../../../lib/continuux/http.ts";
 import {
   createCx,
-  type CxActionHandlers,
   defineSchemas,
 } from "../../../lib/continuux/interaction-html.ts";
 import {
@@ -33,76 +32,110 @@ import {
 import * as H from "../../../lib/natural-html/elements.ts";
 import { customElement } from "../../../lib/natural-html/elements.ts";
 
-type State = { count: number };
+const appState = { count: 0 };
+type State = typeof appState;
 type Vars = Record<string, never>;
 
-const appState: State = { count: 0 };
+const createInteractivity = <
+  State extends { count: number },
+  Vars extends Record<string, unknown>,
+>(
+  state: State,
+) => {
+  const schemas = defineSchemas({
+    increment: decodeCxEnvelope,
+    reset: decodeCxEnvelope,
+  });
 
-const sseInspectorTag = customElement("sse-inspector");
-const sseDiagId = `sse-diagnostics`;
+  type ServerEvents = {
+    readonly js: string;
+    readonly message: string;
+    readonly diag: SseDiagnosticEntry;
+    readonly connection: SseDiagnosticEntry;
+  };
 
-const schemas = defineSchemas({
-  increment: (u: unknown) => decodeCxEnvelope(u),
-  reset: (u: unknown) => decodeCxEnvelope(u),
-});
+  const cx = createCx<State, Vars, typeof schemas, ServerEvents>(schemas);
+  const hub = cx.server.sseHub();
+  const builder = new CxMiddlewareBuilder<ServerEvents>({
+    hub,
+    postUrl: "/cx",
+    sseUrl: "/cx/sse",
+    importUrl: "/browser-ua-aide.js",
+  });
+  const { setText, setDataset } = builder.domJs;
 
-type ServerEvents = {
-  readonly js: string;
-  readonly message: string;
-  readonly diag: SseDiagnosticEntry;
-  readonly connection: SseDiagnosticEntry;
+  const sseDiagsElement = customElement("sse-inspector");
+  const sseDiagsElementId = `sse-diagnostics`;
+  const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
+
+  const commitAction = (
+    action: "increment" | "reset",
+    spec: string,
+    sessionId?: string,
+    nextValue?: number,
+  ): CxHandlerResult => {
+    state.count = typeof nextValue === "number" ? nextValue : state.count + 1;
+    const js = [
+      setText("count", String(state.count)),
+      setText("status", `ok:${action}`),
+      setDataset("lastSpec", spec),
+      setDataset("lastCount", String(state.count)),
+    ].join("\n");
+
+    hub.broadcast("js", js);
+    if (sessionId) {
+      sseDiagnostics.diag(sessionId, {
+        message: `${action}`,
+        level: "info",
+        payload: { sessionId, count: state.count, execDomJS: js },
+      });
+    }
+    return { ok: true };
+  };
+
+  const middleware = builder.middleware<State, Vars, typeof schemas, "action">({
+    uaCacheControl: "no-store",
+    onConnect: async ({ session, sessionId }) => {
+      await session.sendWhenReady("js", setText("count", String(state.count)));
+      await session.sendWhenReady(
+        "js",
+        setDataset("lastCount", String(state.count)),
+      );
+      await session.sendWhenReady("js", setDataset("lastSpec", "init"));
+      await session.sendWhenReady("js", setText("status", "connected"));
+      await session.sendWhenReady("message", `connected:${sessionId}`);
+      sseDiagnostics.connection(sessionId, {
+        message: "SSE diagnostics channel established",
+        level: "info",
+      });
+    },
+    interaction: {
+      cx,
+      handlers: {
+        increment: ({ cx: env, sessionId }) =>
+          commitAction("increment", env.spec, sessionId),
+        reset: ({ cx: env, sessionId }) =>
+          commitAction("reset", env.spec, sessionId, 0),
+      },
+    },
+  });
+
+  return {
+    cx,
+    middleware,
+    sseDiagnostics,
+    sseDiagsElement: sseDiagsElement,
+    sseDiagsElementId: sseDiagsElementId,
+  };
 };
 
-const cx = createCx<State, Vars, typeof schemas, ServerEvents>(schemas);
-const hub = cx.server.sseHub();
-const builder = new CxMiddlewareBuilder<ServerEvents>({
-  hub,
-  postUrl: "/cx",
-  sseUrl: "/cx/sse",
-  importUrl: "/browser-ua-aide.js",
-});
-const { setText, setDataset } = builder.domJs;
-const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
-
-const commitAction = (
-  action: "increment" | "reset",
-  spec: string,
-  sessionId?: string,
-  nextValue?: number,
-): CxHandlerResult => {
-  appState.count = typeof nextValue === "number"
-    ? nextValue
-    : appState.count + 1;
-  const js = [
-    setText("count", String(appState.count)),
-    setText("status", `ok:${action}`),
-    setDataset("lastSpec", spec),
-    setDataset("lastCount", String(appState.count)),
-  ].join("\n");
-
-  hub.broadcast("js", js);
-  if (sessionId) {
-    sseDiagnostics.diag(sessionId, {
-      message: `${action}`,
-      level: "info",
-      payload: { sessionId, count: appState.count, execDomJS: js },
-    });
-  }
-  return { ok: true };
-};
-
-const handlers: CxActionHandlers<
-  State,
-  Vars,
-  typeof schemas,
-  ServerEvents,
-  "action"
-> = {
-  increment: ({ cx: env, sessionId }) =>
-    commitAction("increment", env.spec, sessionId),
-  reset: ({ cx: env, sessionId }) =>
-    commitAction("reset", env.spec, sessionId, 0),
-};
+const {
+  cx,
+  middleware: interativityMiddleware,
+  sseDiagnostics,
+  sseDiagsElement,
+  sseDiagsElementId,
+} = createInteractivity<State, Vars>(appState);
 
 const pageHtml = (): string => {
   const boot = cx.html.bootModuleScriptTag({
@@ -176,12 +209,12 @@ const pageHtml = (): string => {
               "Open two tabs to see shared in-memory state.",
             ),
             H.section(
-              { class: "dialog-diagnostics", id: sseDiagId },
+              { class: "dialog-diagnostics", id: sseDiagsElementId },
               H.h3("SSE diagnostics"),
               H.p(
                 "Watch how ContinuUX SSE updates carry validation and submission events.",
               ),
-              sseInspectorTag(),
+              sseDiagsElement(),
             ),
           ),
           boot,
@@ -199,37 +232,10 @@ const pageHtml = (): string => {
   );
 };
 
-const app = Application.sharedState<State, Vars>(appState);
+const app = Application.sharedState(appState);
 
-// Serve the inspector module via middleware (instead of app.get(...)).
 app.use(sseDiagnostics.middleware<State, Vars>());
-
-app.use(
-  builder.middleware<State, Vars, typeof schemas, "action">({
-    uaCacheControl: "no-store",
-    onConnect: async ({ session, sessionId }) => {
-      await session.sendWhenReady(
-        "js",
-        setText("count", String(appState.count)),
-      );
-      await session.sendWhenReady(
-        "js",
-        setDataset("lastCount", String(appState.count)),
-      );
-      await session.sendWhenReady("js", setDataset("lastSpec", "init"));
-      await session.sendWhenReady("js", setText("status", "connected"));
-      await session.sendWhenReady("message", `connected:${sessionId}`);
-      sseDiagnostics.connection(sessionId, {
-        message: "SSE diagnostics channel established",
-        level: "info",
-      });
-    },
-    interaction: {
-      cx,
-      handlers,
-    },
-  }),
-);
+app.use(interativityMiddleware);
 app.get(
   "/",
   () =>
