@@ -173,7 +173,7 @@ const DEFAULT_SSE_HEADERS = {
   connection: "keep-alive",
 };
 
-export function devExperienceAide<
+export function hotReloadAide<
   State extends Record<string, unknown> = Record<string, never>,
   Vars extends VarsRecord = VarsRecord,
 >(options?: DevExperienceOptions): DevExperienceHub<State, Vars> {

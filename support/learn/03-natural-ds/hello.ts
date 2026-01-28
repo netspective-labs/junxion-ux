@@ -24,7 +24,7 @@ import {
   pageHeader,
   sidebarHeader,
 } from "../../../lib/natural-ds/mod.ts";
-import { devExperienceAide } from "../../../lib/natural-dx/aide.ts";
+import { hotReloadAide } from "../../../lib/natural-dx/hot-reload.ts";
 import { icons } from "../../../lib/natural-html/assets.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
 import { combineHast, headSlots } from "../../../lib/natural-html/patterns.ts";
@@ -32,8 +32,7 @@ import { combineHast, headSlots } from "../../../lib/natural-html/patterns.ts";
 type State = Record<string, never>;
 type Vars = Record<string, never>;
 
-const devHub = devExperienceAide<State, Vars>();
-
+const hra = hotReloadAide<State, Vars>();
 const app = Application.sharedState<State, Vars>({});
 const ds = naturalDesignSystem();
 
@@ -112,7 +111,7 @@ app.use(async (c, next) => {
   console.log("[req]", c.req.method, u.pathname);
   return await next();
 });
-app.use(devHub.middleware);
+app.use(hra.middleware);
 
 app.get("/", () =>
   new Response(pageHtml(), {
