@@ -9,6 +9,7 @@
  * - Browser-only Markdown rendering using remark from CDN:
  *   - Fetch /example.md (example markdown)
  *   - Render it to HTML in the browser
+ * - Simple Tabular UX datatable (DataTables) with explicit head slot contributions
  *
  * Run:
  *   deno run -A --unstable-bundle support/learn/02-starter-ds/starter-ds.ts
@@ -20,14 +21,40 @@
 import { autoTsJsBundler } from "../../../lib/continuux/bundle.ts";
 import { Application } from "../../../lib/continuux/http.ts";
 import * as H from "../../../lib/natural-html/elements.ts";
-import { headSlots } from "../../../lib/natural-html/patterns.ts";
+import { headGroup, headSlots } from "../../../lib/natural-html/patterns.ts";
 import { starterDesignSystem } from "../../../lib/natural-html/starter-ds.ts";
+import type { TabularColumn } from "../../../lib/tabular-ux/datatables.ts";
+import {
+  tabular,
+  tabularHeadSlots,
+} from "../../../lib/tabular-ux/datatables.ts";
 
 type State = Record<string, never>;
 type Vars = Record<string, never>;
 
 const app = Application.sharedState<State, Vars>({});
 const ds = starterDesignSystem();
+
+type TeamMember = {
+  readonly name: string;
+  readonly role: string;
+  readonly location: string;
+};
+
+const teamMembers: readonly TeamMember[] = [
+  { name: "Avery Li", role: "Product Engineer", location: "San Francisco" },
+  { name: "Noah Gutierrez", role: "Design Researcher", location: "Austin" },
+  { name: "Emi Nagato", role: "Cloud Architect", location: "Seattle" },
+];
+
+const teamColumns: TabularColumn<TeamMember>[] = [
+  { key: "name", header: "Name" },
+  { key: "role", header: "Role" },
+  { key: "location", header: "Location" },
+];
+
+const teamMembersTable = tabular<TeamMember>();
+const tableHeadSlots = tabularHeadSlots({ plugins: "minimal" });
 
 const exampleMarkdown = `# Hello Markdown 👋
 
@@ -48,7 +75,7 @@ const pageHtml = (): string => {
       title: () => H.span("ContinuUX Hello Markdown"),
       lead: () =>
         H.p("PicoCSS + Remark in-browser markdown rendering (bundled TS)."),
-      content: () =>
+      content: (ctx) =>
         H.div(
           H.article(
             H.div(
@@ -63,6 +90,24 @@ const pageHtml = (): string => {
             H.codeTag("/markdown.client.ts"),
             " (bundled from TypeScript).",
           ),
+          H.section(
+            { class: ctx.cls("tabular-example") },
+            H.h2("Simple Tabular UX example"),
+            H.p(
+              "A typed DataTables grid rendered with ",
+              H.codeTag("tabular()"),
+              " and the ",
+              H.codeTag("tabularHeadSlots()"),
+              " helper so the CSS/JS assets are declared explicitly.",
+            ),
+            teamMembersTable(ctx, {
+              caption: "Example team roster",
+              columns: teamColumns,
+              data: teamMembers,
+              options: { pageLength: 3 },
+              class: ctx.cls("tabular-example__table"),
+            }),
+          ),
         ),
     },
     headSlots: headSlots({
@@ -74,7 +119,12 @@ const pageHtml = (): string => {
           content: "width=device-width, initial-scale=1",
         }),
       ],
-      scripts: [H.script({ type: "module", src: "/markdown.client.ts" })],
+      links: tableHeadSlots.links,
+      scripts: (ctx) =>
+        headGroup(
+          ...(tableHeadSlots.scripts ? [tableHeadSlots.scripts(ctx)] : []),
+          H.script({ type: "module", src: "/markdown.client.ts" }),
+        ),
     }),
   });
 
