@@ -13,9 +13,9 @@
 
 import { z } from "@zod";
 import {
-  createSseDiagnostics,
   type SseDiagnosticEntry,
-} from "../../../lib/continuux/http-ux/aide.ts";
+  sseDiagnosticsAide,
+} from "../../../lib/continuux/http-ux/sse-diags.ts";
 import { Application, htmlResponse } from "../../../lib/continuux/http.ts";
 import {
   actionSchemas,
@@ -166,7 +166,7 @@ const interactivityAide = <
 
   const cx = createCx<State, Vars, typeof actions, ServerEvents>(actions);
   const hub = cx.server.sseHub();
-  const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
+  const sseDiagnostics = sseDiagnosticsAide(hub, "diag", "connection");
   const builder = new CxMiddlewareBuilder<ServerEvents>({ hub });
   const patch = builder.patch;
   const sseInspectorTag = customElement("sse-inspector");

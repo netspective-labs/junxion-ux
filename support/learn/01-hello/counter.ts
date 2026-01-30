@@ -16,9 +16,9 @@
  */
 
 import {
-  createSseDiagnostics,
   type SseDiagnosticEntry,
-} from "../../../lib/continuux/http-ux/aide.ts";
+  sseDiagnosticsAide,
+} from "../../../lib/continuux/http-ux/sse-diags.ts";
 import { Application } from "../../../lib/continuux/http.ts";
 import {
   actionSchemas,
@@ -67,7 +67,7 @@ const interactivityAide = <
 
   const sseDiagsElement = customElement("sse-inspector");
   const sseDiagsElementId = `sse-diagnostics`;
-  const sseDiagnostics = createSseDiagnostics(hub, "diag", "connection");
+  const sseDiagnostics = sseDiagnosticsAide(hub, "diag", "connection");
 
   const commitAction = (
     action: "increment" | "reset",

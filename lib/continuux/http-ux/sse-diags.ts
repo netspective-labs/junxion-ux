@@ -49,7 +49,7 @@ const DEFAULT_INSPECTOR_CACHE = "no-store";
 const DEFAULT_INSPECTOR_ATTEMPTS = 20;
 const DEFAULT_INSPECTOR_DELAY_MS = 150;
 
-export const createSseDiagnostics = <
+export const sseDiagnosticsAide = <
   E extends Record<string, unknown>,
   D extends keyof E,
   C extends keyof E = D,
