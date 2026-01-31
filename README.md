@@ -119,7 +119,6 @@ of Continuux itself.
   engines, and DOM mutation with explicit HTML generation, safe raw content
   handling, and stable attribute ordering. It is the foundation for all SSR in
   AgentX.
-- `elements-dom.js` is a twin of `elements.ts` for web browser user agents.
 - Universal helpers that are safe to use anywhere and have no browser- or
   server-specific assumptions.
 - `design-system.ts` is the highly opinionated, full-stack UI contract. It
